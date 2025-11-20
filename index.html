@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#ffffff" />
+    <title>校园论坛 - 学生交流社区</title>
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <script id="theme-init">
+      (function () {
+        try {
+          function getSystemTheme() {
+            if (typeof window === 'undefined' || !window.matchMedia) return 'light';
+            return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+          }
+
+          function getInitialTheme() {
+            try {
+              const saved = localStorage.getItem('ui-storage');
+              if (saved) {
+                const parsed = JSON.parse(saved);
+                if (parsed && parsed.state && parsed.state.theme) {
+                  const theme = parsed.state.theme;
+                  if (theme === 'system') {
+                    return getSystemTheme();
+                  }
+                  return theme === 'dark' ? 'dark' : 'light';
+                }
+              }
+            } catch (error) {
+              console.error('读取主题失败:', error);
+            }
+
+            return getSystemTheme();
+          }
+
+          const effectiveTheme = getInitialTheme();
+          const html = document.documentElement;
+
+          html.classList.remove('dark', 'light');
+
+          if (effectiveTheme === 'dark') {
+            html.classList.add('dark');
+            html.setAttribute('data-theme', 'dark');
+          } else {
+            html.setAttribute('data-theme', 'light');
+          }
+        } catch (error) {
+          console.error('主题初始化失败:', error);
+        }
+      })();
+    </script>
+  </head>
+  <body class="antialiased bg-gray-50 dark:bg-gray-950 transition-colors duration-200 min-h-screen">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
