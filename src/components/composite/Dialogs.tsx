@@ -53,37 +53,3 @@ export function ConfirmDialog({
     </Modal>
   )
 }
-
-interface ReportDialogProps {
-  isOpen: boolean
-  onClose: () => void
-  onSubmit: (reason: string) => Promise<void> | void
-}
-
-export function ReportDialog({ isOpen, onClose, onSubmit }: ReportDialogProps) {
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault()
-    const formData = new FormData(e.currentTarget)
-    const reason = String(formData.get('reason') || '')
-    await onSubmit(reason)
-    onClose()
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} title="举报内容">
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">原因</label>
-        <textarea
-          name="reason"
-          className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-          rows={4}
-          placeholder="请描述举报原因"
-        />
-        <DialogActions>
-          <Button type="button" variant="outline" size="sm" onClick={onClose}>取消</Button>
-          <Button type="submit" size="sm" className="bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600">提交举报</Button>
-        </DialogActions>
-      </form>
-    </Modal>
-  )
-}

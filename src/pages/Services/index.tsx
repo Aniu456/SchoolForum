@@ -1,5 +1,5 @@
 /**
- * 校园服务中心 - 所有功能入口
+ * 服务中心 - 二手交易入口
  */
 import { Link } from 'react-router-dom';
 
@@ -16,42 +16,10 @@ const SERVICES: ServiceCard[] = [
   {
     id: 'marketplace',
     title: '二手交易',
-    description: '校园闲置物品交易平台',
+    description: '闲置物品交易平台',
     icon: '🛒',
     path: '/marketplace',
     color: 'bg-blue-500',
-  },
-  {
-    id: 'resources',
-    title: '学习资源',
-    description: '分享学习资料，共同进步',
-    icon: '📚',
-    path: '/resources',
-    color: 'bg-green-500',
-  },
-  {
-    id: 'clubs',
-    title: '社团招新',
-    description: '发现有趣的社团，结识志同道合的朋友',
-    icon: '🎭',
-    path: '/clubs',
-    color: 'bg-purple-500',
-  },
-  {
-    id: 'lostfound',
-    title: '失物招领',
-    description: '帮助失主找回失物',
-    icon: '🔍',
-    path: '/lostfound',
-    color: 'bg-orange-500',
-  },
-  {
-    id: 'carpool',
-    title: '拼车拼单',
-    description: '拼车出行，拼单优惠',
-    icon: '🚗',
-    path: '/carpool',
-    color: 'bg-red-500',
   },
   {
     id: 'forum',
@@ -69,15 +37,15 @@ export default function ServicesPage() {
       {/* 头部 */}
       <div className="mb-12 text-center">
         <h1 className="mb-4 text-4xl font-bold text-gray-900 dark:text-gray-100">
-          🎓 校园服务中心
+          🎓 服务中心
         </h1>
         <p className="text-lg text-gray-600 dark:text-gray-400">
-          公益性开放性校园论坛 · 服务学生 · 连接你我
+          公益性开放性论坛平台 · 服务所有用户 · 连接你我
         </p>
       </div>
 
       {/* 服务卡片 */}
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
         {SERVICES.map((service) => (
           <Link
             key={service.id}
@@ -115,13 +83,13 @@ export default function ServicesPage() {
         </h3>
         <div className="space-y-3 text-gray-700 dark:text-gray-300">
           <p>
-            <strong>🌟 公益性：</strong>本论坛完全免费，不收取任何费用，致力于为学生提供便利的交流平台。
+            <strong>🌟 公益性：</strong>本论坛完全免费，不收取任何费用，致力于为用户提供便利的交流平台。
           </p>
           <p>
-            <strong>🔓 开放性：</strong>欢迎所有学生加入，自由发表观点，分享资源，互帮互助。
+            <strong>🔓 开放性：</strong>欢迎所有用户加入，自由发表观点，分享资源，互帮互助。
           </p>
           <p>
-            <strong>🤝 服务学生：</strong>从学习到生活，从交易到社交，我们提供全方位的校园服务。
+            <strong>🤝 服务用户：</strong>从学习到生活，从交易到社交，我们提供全方位的服务。
           </p>
           <p>
             <strong>🛡️ 安全保障：</strong>支持匿名发帖，保护隐私；内容审核机制，维护良好社区环境。
@@ -148,7 +116,7 @@ export default function ServicesPage() {
             <ul className="space-y-1 text-sm text-gray-600 dark:text-gray-400">
               <li>• 个人信息严格保密</li>
               <li>• 可选择匿名发布内容</li>
-              <li>• 举报功能保护社区安全</li>
+              <li>• 系统监控保护社区安全</li>
             </ul>
           </div>
         </div>

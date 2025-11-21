@@ -2,10 +2,8 @@
 // 导出新功能模块类型
 // ============================================
 export * from './marketplace';
-export * from './resources';
-export * from './clubs';
-export * from './lostfound';
-export * from './carpool';
+export * from './message';
+export * from './activity';
 
 // ============================================
 // 用户相关类型
@@ -14,11 +12,9 @@ export interface User {
   id: string;
   username: string;
   email?: string; // 某些接口不返回 email
-  studentId?: string;
   nickname: string;
   avatar?: string;
   bio?: string;
-  role: 'STUDENT' | 'TEACHER' | 'ADMIN';
   isActive: boolean;
   isBanned: boolean;
   createdAt: string;
@@ -116,7 +112,7 @@ export interface Comment {
 // ============================================
 // 通知类型
 // ============================================
-export type NotificationType = 'COMMENT' | 'REPLY' | 'LIKE' | 'SYSTEM' | 'FOLLOW';
+export type NotificationType = 'COMMENT' | 'REPLY' | 'LIKE' | 'SYSTEM' | 'FOLLOW' | 'MESSAGE';
 
 export interface Notification {
   id: string;
@@ -174,6 +170,23 @@ export interface AuthResponse {
   user: User;
   accessToken: string;
   refreshToken: string;
+}
+
+// 忘记密码请求
+export interface ForgotPasswordRequest {
+  email: string;
+}
+
+// 重置密码请求
+export interface ResetPasswordRequest {
+  token: string;
+  password: string;
+  confirmPassword?: string; // 前端验证用
+}
+
+// 验证重置令牌请求
+export interface VerifyResetTokenRequest {
+  token: string;
 }
 
 // 创建帖子请求

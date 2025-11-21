@@ -6,9 +6,10 @@ import { Avatar, PostCard, EmptyState, LoadingState, Button, Card } from '@/comp
 import { formatTime } from '@/utils/format'
 import { useAuthStore } from '@/store/useAuthStore'
 import { usePosts } from '@/hooks/usePosts'
+import { useMyActivities } from '@/hooks/useActivity'
 import { useToast } from '@/utils/toast-hook'
 import { favoriteApi, draftApi, type FavoriteFolder, type Favorite, type PostDraft } from '@/api'
-import type { Post } from '@/types'
+import type { Post, UserActivity } from '@/types'
 
 type Tab = 'posts' | 'favorites' | 'drafts' | 'connections' | 'activity' | 'settings'
 
@@ -19,6 +20,10 @@ export default function ProfilePage() {
   const { user: currentUser } = useAuthStore()
   const { data: postsData, isLoading } = usePosts({})
   const posts = Array.isArray(postsData) ? postsData : postsData?.data || []
+
+  // 用户动态
+  const { data: activitiesData, isLoading: isActivitiesLoading } = useMyActivities({ page: 1, limit: 20 })
+  const activities = activitiesData?.data || []
 
   // 收藏夹状态
   const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([])
@@ -162,12 +167,6 @@ export default function ProfilePage() {
             <p className="mb-4 text-gray-600 dark:text-gray-400">{currentUser.email}</p>
             {currentUser.bio && <p className="mb-4 text-gray-700 dark:text-gray-300">{currentUser.bio}</p>}
             <div className="flex flex-wrap justify-center gap-4 md:justify-start">
-              <div className="rounded-lg bg-blue-100 px-4 py-2 dark:bg-blue-900">
-                <div className="text-sm text-gray-600 dark:text-gray-400">角色</div>
-                <div className="font-semibold text-blue-700 dark:text-blue-300">
-                  {currentUser.role === 'STUDENT' ? '学生' : currentUser.role === 'TEACHER' ? '教师' : '管理员'}
-                </div>
-              </div>
               <div className="rounded-lg bg-green-100 px-4 py-2 dark:bg-green-900">
                 <div className="text-sm text-gray-600 dark:text-gray-400">注册时间</div>
                 <div className="font-semibold text-green-700 dark:text-green-300">
@@ -442,11 +441,154 @@ export default function ProfilePage() {
       {/* 动态 */}
       {activeTab === 'activity' && (
         <div>
-          <EmptyState
-            title="我的动态"
-            description="这里将展示您的最新动态"
-            icon="📊"
-          />
+          {isActivitiesLoading ? (
+            <LoadingState message="加载动态..." />
+          ) : activities.length > 0 ? (
+            <div className="space-y-4">
+              {activities.map((activity) => (
+                <Card key={activity.id} className="p-6">
+                  <div className="flex items-start gap-4">
+                    {/* 动态类型图标 */}
+                    <div className="flex-shrink-0">
+                      {activity.type === 'NEW_POST' && (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-2xl dark:bg-blue-900">
+                          📝
+                        </div>
+                      )}
+                      {activity.type === 'NEW_COMMENT' && (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl dark:bg-green-900">
+                          💬
+                        </div>
+                      )}
+                      {activity.type === 'NEW_REPLY' && (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl dark:bg-purple-900">
+                          💭
+                        </div>
+                      )}
+                    </div>
+
+                    {/* 动态内容 */}
+                    <div className="flex-1">
+                      {/* 新帖子动态 */}
+                      {activity.type === 'NEW_POST' && activity.post && (
+                        <>
+                          <div className="mb-2 flex items-center gap-2">
+                            <Avatar
+                              src={activity.post.author.avatar}
+                              alt={activity.post.author.username}
+                              username={activity.post.author.username}
+                              size={32}
+                              seed={activity.post.author.id}
+                            />
+                            <div>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {activity.post.author.nickname || activity.post.author.username}
+                              </span>
+                              <span className="ml-2 text-gray-600 dark:text-gray-400">发布了新帖子</span>
+                            </div>
+                          </div>
+                          <div
+                            className="cursor-pointer rounded-lg bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
+                            onClick={() => navigate(`/posts/${activity.post!.id}`)}>
+                            <h4 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">
+                              {activity.post.title}
+                            </h4>
+                            <p className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                              {activity.post.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
+                            </p>
+                          </div>
+                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                            {formatTime(activity.createdAt)}
+                          </div>
+                        </>
+                      )}
+
+                      {/* 新评论动态 */}
+                      {activity.type === 'NEW_COMMENT' && activity.comment && (
+                        <>
+                          <div className="mb-2 flex items-center gap-2">
+                            <Avatar
+                              src={activity.comment.author.avatar}
+                              alt={activity.comment.author.username}
+                              username={activity.comment.author.username}
+                              size={32}
+                              seed={activity.comment.author.id}
+                            />
+                            <div>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {activity.comment.author.nickname || activity.comment.author.username}
+                              </span>
+                              <span className="ml-2 text-gray-600 dark:text-gray-400">
+                                评论了你的帖子
+                              </span>
+                              <span
+                                className="ml-1 cursor-pointer font-medium text-blue-600 hover:underline dark:text-blue-400"
+                                onClick={() => navigate(`/posts/${activity.comment!.post.id}`)}>
+                                《{activity.comment.post.title}》
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                              {activity.comment.content}
+                            </p>
+                          </div>
+                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                            {formatTime(activity.createdAt)}
+                          </div>
+                        </>
+                      )}
+
+                      {/* 新回复动态 */}
+                      {activity.type === 'NEW_REPLY' && activity.comment && (
+                        <>
+                          <div className="mb-2 flex items-center gap-2">
+                            <Avatar
+                              src={activity.comment.author.avatar}
+                              alt={activity.comment.author.username}
+                              username={activity.comment.author.username}
+                              size={32}
+                              seed={activity.comment.author.id}
+                            />
+                            <div>
+                              <span className="font-medium text-gray-900 dark:text-gray-100">
+                                {activity.comment.author.nickname || activity.comment.author.username}
+                              </span>
+                              <span className="ml-2 text-gray-600 dark:text-gray-400">
+                                回复了你的评论
+                              </span>
+                              <span className="ml-1 text-gray-600 dark:text-gray-400">
+                                在帖子
+                              </span>
+                              <span
+                                className="ml-1 cursor-pointer font-medium text-blue-600 hover:underline dark:text-blue-400"
+                                onClick={() => navigate(`/posts/${activity.comment!.post.id}`)}>
+                                《{activity.comment.post.title}》
+                              </span>
+                            </div>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                              {activity.comment.content}
+                            </p>
+                          </div>
+                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
+                            {formatTime(activity.createdAt)}
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              title="暂无动态"
+              description="关注用户后，这里将展示他们的新帖子和你收到的评论"
+              icon="📊"
+            />
+          )}
         </div>
       )}
 

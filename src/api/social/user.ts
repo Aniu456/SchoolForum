@@ -143,6 +143,30 @@ export const authApi = {
   logout: () => {
     return api.post<{ message: string }>('/auth/logout');
   },
+
+  /**
+   * 发送密码重置邮件
+   * POST /auth/forgot-password
+   */
+  forgotPassword: (data: { email: string }) => {
+    return api.post<{ message: string }>('/auth/forgot-password', data);
+  },
+
+  /**
+   * 验证密码重置令牌
+   * POST /auth/verify-reset-token
+   */
+  verifyResetToken: (data: { token: string }) => {
+    return api.post<{ valid: boolean; message?: string }>('/auth/verify-reset-token', data);
+  },
+
+  /**
+   * 重置密码
+   * POST /auth/reset-password
+   */
+  resetPassword: (data: { token: string; password: string }) => {
+    return api.post<{ message: string }>('/auth/reset-password', data);
+  },
 };
 
 /**

@@ -6,10 +6,10 @@
 // 应用配置
 // ============================================
 export const APP_CONFIG = {
-  name: '校园论坛',
-  description: '公益性开放性校园论坛 - 服务学生群体',
+  name: '开放论坛',
+  description: '公益性开放性论坛平台 - 服务所有用户群体',
   version: '1.0.0',
-  author: 'Campus Forum Team',
+  author: 'Open Forum Team',
 } as const;
 
 // ============================================
@@ -57,6 +57,8 @@ export const CACHE_CONFIG = {
 export const ROUTES = {
   home: '/',
   login: '/login',
+  forgotPassword: '/forgot-password',
+  resetPassword: '/reset-password',
   search: '/search',
 
   // 帖子
@@ -75,16 +77,13 @@ export const ROUTES = {
   favorites: '/favorites',
   favoriteDetail: (id: string) => `/favorites/folders/${id}`,
 
+  // 私信
+  messages: '/messages',
+  chat: (conversationId: string) => `/messages/${conversationId}`,
+
   // 服务中心
   services: '/services',
   marketplace: '/marketplace',
-  resources: '/resources',
-  clubs: '/clubs',
-  lostfound: '/lostfound',
-  carpool: '/carpool',
-
-  // 管理
-  adminModeration: '/admin/moderation',
 } as const;
 
 // ============================================

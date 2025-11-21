@@ -10,4 +10,5 @@ export * from './useUsers';
 
 // 新功能 hooks
 export * from './useMarketplace';
-export * from './useResources';
+export * from './useMessages';
+export * from './useActivity';

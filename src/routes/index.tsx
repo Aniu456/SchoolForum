@@ -16,18 +16,6 @@ const ServicesPage = lazy(() => import('@/pages/Services'))
 const MarketplacePage = lazy(() => import('@/pages/Services/Marketplace'))
 const MarketplaceDetailPage = lazy(() => import('@/pages/Services/Marketplace/Detail'))
 const MarketplaceFormPage = lazy(() => import('@/pages/Services/Marketplace/Form'))
-const ResourcesPage = lazy(() => import('@/pages/Services/Resources'))
-const ResourceDetailPage = lazy(() => import('@/pages/Services/Resources/Detail'))
-const ResourceFormPage = lazy(() => import('@/pages/Services/Resources/Form'))
-const ClubsPage = lazy(() => import('@/pages/Services/Clubs'))
-const ClubRecruitmentDetailPage = lazy(() => import('@/pages/Services/Clubs/Detail'))
-const ClubRecruitmentFormPage = lazy(() => import('@/pages/Services/Clubs/Form'))
-const LostFoundPage = lazy(() => import('@/pages/Services/LostFound'))
-const LostFoundDetailPage = lazy(() => import('@/pages/Services/LostFound/Detail'))
-const LostFoundFormPage = lazy(() => import('@/pages/Services/LostFound/Form'))
-const CarpoolPage = lazy(() => import('@/pages/Services/Carpool'))
-const CarpoolDetailPage = lazy(() => import('@/pages/Services/Carpool/Detail'))
-const CarpoolFormPage = lazy(() => import('@/pages/Services/Carpool/Form'))
 
 // Category views removed: API.md 不提供分类接口，已移除所有分类相关功能
 
@@ -37,6 +25,14 @@ const UserDetailPage = lazy(() => import('@/pages/forum/User/Detail'))
 // UserActivity removed: API.md 不提供活动流接口，使用通知接口代替
 const NotificationsPage = lazy(() => import('@/pages/system/Notifications'))
 // FavoriteFolders removed: 收藏夹功能已集成到 Profile 页面的 Tab 中
+
+// Messages views
+const ConversationsPage = lazy(() => import('@/pages/Messages/Conversations'))
+const ChatPage = lazy(() => import('@/pages/Messages/Chat'))
+
+// Auth views
+const ForgotPasswordPage = lazy(() => import('@/pages/system/Auth/ForgotPassword'))
+const ResetPasswordPage = lazy(() => import('@/pages/system/Auth/ResetPassword'))
 
 /**
  * 路由配置
@@ -51,6 +47,16 @@ export const routes: RouteObject[] = [
   {
     path: '/login',
     element: <LoginPage />,
+  },
+  // 忘记密码
+  {
+    path: '/forgot-password',
+    element: <ForgotPasswordPage />,
+  },
+  // 重置密码
+  {
+    path: '/reset-password',
+    element: <ResetPasswordPage />,
   },
   // 搜索
   {
@@ -104,6 +110,16 @@ export const routes: RouteObject[] = [
     element: <NotificationsPage />,
   },
 
+  // 私信
+  {
+    path: '/messages',
+    element: <ConversationsPage />,
+  },
+  {
+    path: '/messages/:conversationId',
+    element: <ChatPage />,
+  },
+
   // 收藏夹（已集成到 Profile 页面的 Tab 中）
   {
     path: '/favorites',
@@ -130,62 +146,6 @@ export const routes: RouteObject[] = [
   {
     path: '/marketplace/:id',
     element: <MarketplaceDetailPage />,
-  },
-
-  // 学习资源
-  {
-    path: '/resources',
-    element: <ResourcesPage />,
-  },
-  {
-    path: '/resources/new',
-    element: <ResourceFormPage />,
-  },
-  {
-    path: '/resources/:id',
-    element: <ResourceDetailPage />,
-  },
-
-  // 社团招新
-  {
-    path: '/clubs',
-    element: <ClubsPage />,
-  },
-  {
-    path: '/clubs/new',
-    element: <ClubRecruitmentFormPage />,
-  },
-  {
-    path: '/clubs/recruitments/:id',
-    element: <ClubRecruitmentDetailPage />,
-  },
-
-  // 失物招领
-  {
-    path: '/lostfound',
-    element: <LostFoundPage />,
-  },
-  {
-    path: '/lostfound/new',
-    element: <LostFoundFormPage />,
-  },
-  {
-    path: '/lostfound/:id',
-    element: <LostFoundDetailPage />,
-  },
-
-  // 拼车拼单
-  {
-    path: '/carpool',
-    element: <CarpoolPage />,
-  },
-  {
-    path: '/carpool/new',
-    element: <CarpoolFormPage />,
-  },
-  {
-    path: '/carpool/:id',
-    element: <CarpoolDetailPage />,
   },
 
   // 404

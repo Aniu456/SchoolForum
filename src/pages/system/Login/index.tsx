@@ -182,6 +182,15 @@ export default function LoginPage() {
             <Button type="submit" disabled={isSubmitting} className="w-full">
               {isSubmitting ? '登录中...' : '登录'}
             </Button>
+
+            {/* 忘记密码链接 */}
+            <div className="text-center text-sm">
+              <a
+                href="/forgot-password"
+                className="text-blue-600 hover:underline dark:text-blue-400">
+                忘记密码？
+              </a>
+            </div>
           </form>
         ) : (
           // 注册表单

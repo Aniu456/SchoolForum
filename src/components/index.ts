@@ -12,7 +12,7 @@ export { default as RichTextEditor } from './composite/RichTextEditor';
 // ============================================
 // 对话框组件
 // ============================================
-export { ConfirmDialog, ReportDialog } from './composite/Dialogs';
+export { ConfirmDialog } from './composite/Dialogs';
 
 // ============================================
 // 错误边界

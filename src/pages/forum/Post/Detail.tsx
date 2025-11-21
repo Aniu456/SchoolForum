@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Avatar, ConfirmDialog, EmptyState, ReportDialog, LoadingState, RichTextEditor, Button } from '@/components'
+import { Avatar, ConfirmDialog, EmptyState, LoadingState, RichTextEditor, Button } from '@/components'
 import { formatTime } from '@/utils/format'
 import { stripHtml } from '@/utils/helpers'
 import { Comment } from '@/types'
 import { useToast } from '@/utils/toast-hook'
-import { reportApi } from '@/api'
 import { likeApi, favoriteApi } from '@/api'
 import { usePost } from '@/hooks/usePosts'
 import { useComments, useCreateComment } from '@/hooks/useComments'
@@ -129,7 +128,6 @@ export default function PostDetailPage() {
   const [commentContent, setCommentContent] = useState('')
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [showReportDialog, setShowReportDialog] = useState(false)
   const [showFavoriteDialog, setShowFavoriteDialog] = useState(false)
   const [folders, setFolders] = useState<any[]>([])
   const [selectedFolderId, setSelectedFolderId] = useState('')
@@ -259,24 +257,6 @@ export default function PostDetailPage() {
       showSuccess('已加入收藏')
     } catch {
       showError('收藏失败，请重试')
-    }
-  }
-
-  const handleReport = async (reason: string) => {
-    if (!currentUser) {
-      showError('请先登录')
-      return
-    }
-    try {
-      await reportApi.createReport({
-        targetId: post.id,
-        targetType: 'POST',
-        reason: reason as any,
-        description: '',
-      })
-      showSuccess('举报已提交，我们会尽快处理')
-    } catch {
-      showError('举报失败，请重试')
     }
   }
 
@@ -429,14 +409,6 @@ export default function PostDetailPage() {
               ⭐ {post.collectedCount ?? 0}
             </button>
           )}
-          {!isAuthor && (
-            <button
-              onClick={() => setShowReportDialog(true)}
-              className="flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-red-600 hover:bg-red-50 dark:border-red-700 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
-              title="举报">
-              🚩 举报
-            </button>
-          )}
           <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
             👁️ {post.viewCount}
           </button>
@@ -507,13 +479,6 @@ export default function PostDetailPage() {
         confirmText="删除"
         cancelText="取消"
         type="danger"
-      />
-
-      {/* 举报对话框 */}
-      <ReportDialog
-        isOpen={showReportDialog}
-        onClose={() => setShowReportDialog(false)}
-        onSubmit={handleReport}
       />
 
       {/* 收藏夹选择对话框 */}
