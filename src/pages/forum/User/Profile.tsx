@@ -1,16 +1,18 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { Avatar, PostCard, EmptyState, LoadingState, Button, Card } from '@/components'
 import { formatTime } from '@/utils/format'
 import { useAuthStore } from '@/store/useAuthStore'
 import { usePosts } from '@/hooks/usePosts'
-import { useMyActivities } from '@/hooks/useActivity'
+import { useFollowingActivities } from '@/hooks/useActivity'
 import { useToast } from '@/utils/toast-hook'
-import { favoriteApi, draftApi, type FavoriteFolder, type Favorite, type PostDraft } from '@/api'
-import type { Post, UserActivity } from '@/types'
+import { favoriteApi, draftApi, followApi, type FavoriteFolder, type Favorite } from '@/api'
+import type { Post } from '@/types'
+import type { Draft } from '@/api/content/draft'
 import { useUserFollowers, useUserFollowing } from '@/hooks/useUsers'
+import { useQueryClient } from '@tanstack/react-query'
 
 type Tab = 'posts' | 'favorites' | 'drafts' | 'connections' | 'activity' | 'settings'
 
@@ -19,14 +21,50 @@ export default function ProfilePage() {
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
   const { user: currentUser } = useAuthStore()
+  const queryClient = useQueryClient()
   const { data: postsData, isLoading } = usePosts({})
   const posts = Array.isArray(postsData) ? postsData : postsData?.data || []
-  const { data: followingData, isLoading: followingLoading } = useUserFollowing(currentUser?.id || '', 1, 50)
-  const { data: followersData, isLoading: followersLoading } = useUserFollowers(currentUser?.id || '', 1, 50)
 
-  // 用户动态
-  const { data: activitiesData, isLoading: isActivitiesLoading } = useMyActivities({ page: 1, limit: 20 })
-  const activities = activitiesData?.data || []
+  // 关注/粉丝分页状态
+  const [followingPage, setFollowingPage] = useState(1)
+  const [followersPage, setFollowersPage] = useState(1)
+  const CONNECTIONS_LIMIT = 20 // 每页显示 20 条
+
+  const { data: followingData, isLoading: followingLoading, refetch: refetchFollowing } = useUserFollowing(currentUser?.id || '', followingPage, CONNECTIONS_LIMIT)
+  const { data: followersData, isLoading: followersLoading, refetch: refetchFollowers } = useUserFollowers(currentUser?.id || '', followersPage, CONNECTIONS_LIMIT)
+
+  // 关注状态管理
+  const [followingStates, setFollowingStates] = useState<Record<string, boolean>>({})
+
+  // 动态类型筛选
+  const [activityType, setActivityType] = useState<'all' | 'posts' | 'comments' | 'likes' | 'favorites'>('all')
+
+  // 动态分页和排序
+  const [activityPage, setActivityPage] = useState(1)
+  const [activitySortDesc, setActivitySortDesc] = useState(true) // true=倒序（最新在前），false=正序（最旧在前）
+  const ACTIVITY_LIMIT = 20
+
+  // 关注用户的动态流 - 后端已实现，返回格式: {type, id, author, content, createdAt, data}
+  const { data: activitiesData, isLoading: isActivitiesLoading } = useFollowingActivities({ page: activityPage, limit: ACTIVITY_LIMIT })
+  const allActivities = activitiesData?.data || []
+
+  // 动态类型筛选和排序
+  const filteredActivities = activityType === 'all'
+    ? allActivities
+    : allActivities.filter((activity: any) => {
+      if (activityType === 'posts') return activity.type === 'POST'
+      if (activityType === 'comments') return activity.type === 'COMMENT'
+      if (activityType === 'likes') return activity.type === 'LIKE'
+      if (activityType === 'favorites') return activity.type === 'FAVORITE'
+      return true
+    })
+
+  // 排序逻辑
+  const activities = [...filteredActivities].sort((a: any, b: any) => {
+    const timeA = new Date(a.createdAt).getTime()
+    const timeB = new Date(b.createdAt).getTime()
+    return activitySortDesc ? timeB - timeA : timeA - timeB
+  })
 
   // 收藏夹状态
   const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([])
@@ -35,7 +73,7 @@ export default function ProfilePage() {
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(false)
 
   // 草稿状态
-  const [drafts, setDrafts] = useState<PostDraft[]>([])
+  const [drafts, setDrafts] = useState<Draft[]>([])
   const [isDraftsLoading, setIsDraftsLoading] = useState(false)
 
   // 根据路由确定默认 tab
@@ -92,11 +130,54 @@ export default function ProfilePage() {
     }
   }, [currentUser])
 
+  // 处理关注/取消关注
+  const handleToggleFollow = async (userId: string, currentlyFollowing: boolean) => {
+    try {
+      if (currentlyFollowing) {
+        await followApi.unfollowUser(userId)
+        showSuccess('已取消关注')
+      } else {
+        await followApi.followUser(userId)
+        showSuccess('关注成功')
+      }
+
+      // 刷新缓存
+      await queryClient.invalidateQueries({ queryKey: ['user', userId] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.invalidateQueries({ queryKey: ['followers'] })
+      await queryClient.invalidateQueries({ queryKey: ['following'] })
+
+      // 重新检查关注状态
+      const { isFollowing } = await followApi.checkFollowing(userId)
+      setFollowingStates(prev => ({ ...prev, [userId]: isFollowing }))
+
+      // 刷新列表
+      await refetchFollowing()
+      await refetchFollowers()
+    } catch (error: any) {
+      console.error('关注操作错误:', error)
+      const errorMessage = error?.message || error?.response?.data?.message || error?.data?.message || ''
+
+      if (errorMessage.includes('已经关注') || errorMessage.includes('已关注')) {
+        showSuccess('已关注')
+        setFollowingStates(prev => ({ ...prev, [userId]: true }))
+      } else if (errorMessage.includes('未关注')) {
+        showSuccess('已取消关注')
+        setFollowingStates(prev => ({ ...prev, [userId]: false }))
+      } else {
+        showError(`操作失败：${errorMessage || '请重试'}`)
+      }
+
+      await refetchFollowing()
+      await refetchFollowers()
+    }
+  }
+
   // 加载草稿列表
   const loadDrafts = async () => {
     setIsDraftsLoading(true)
     try {
-      const response = await draftApi.getDrafts()
+      const response = await draftApi.getList({ page: 1, limit: 50 })
       setDrafts(response.data || [])
     } catch {
       showError('加载草稿失败')
@@ -106,15 +187,12 @@ export default function ProfilePage() {
     }
   }
 
-  // 当切换到收藏夹或草稿tab时加载数据
+  // 页面加载时获取收藏夹和草稿数据
   useEffect(() => {
-    if (activeTab === 'favorites') {
-      loadFavoriteFolders()
-    } else if (activeTab === 'drafts') {
-      loadDrafts()
-    }
+    loadFavoriteFolders()
+    loadDrafts()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab])
+  }, [])
 
   if (!currentUser) {
     navigate('/login')
@@ -280,7 +358,7 @@ export default function ProfilePage() {
                 }}
               />
             )}
-          </div>    
+          </div>
         </div>
       )}
 
@@ -383,7 +461,7 @@ export default function ProfilePage() {
                         variant="outline"
                         onClick={async () => {
                           try {
-                            await draftApi.deleteDraft(draft.id)
+                            await draftApi.delete(draft.id)
                             showSuccess('草稿已删除')
                             loadDrafts()
                           } catch {
@@ -422,24 +500,58 @@ export default function ProfilePage() {
               {followingLoading ? (
                 <LoadingState message="加载关注列表..." />
               ) : (followingData as any)?.data?.length > 0 ? (
-                <div className="space-y-3">
-                  {(followingData as any)?.data?.map((u: any) => (
-                    <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
-                      <div className="flex items-center gap-3">
-                        <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
-                        <div>
-                          <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                <>
+                  <div className="space-y-3">
+                    {(followingData as any)?.data?.map((u: any) => (
+                      <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                        <div
+                          className="flex flex-1 cursor-pointer items-center gap-3"
+                          onClick={() => navigate(`/users/${u.id}`)}>
+                          <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
+                          <div>
+                            <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                            <div className="text-xs text-gray-500 dark:text-gray-400">
+                              关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                            </div>
                           </div>
                         </div>
+                        <div className="flex gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleToggleFollow(u.id, true)
+                            }}>
+                            取消关注
+                          </Button>
+                        </div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/users/${u.id}`)}>
-                        查看
+                    ))}
+                  </div>
+                  {/* 分页控件 */}
+                  <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      第 {followingPage} 页，共 {(followingData as any)?.meta?.totalPages || 1} 页
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={followingPage === 1}
+                        onClick={() => setFollowingPage(p => Math.max(1, p - 1))}>
+                        上一页
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={followingPage >= ((followingData as any)?.meta?.totalPages || 1)}
+                        onClick={() => setFollowingPage(p => p + 1)}>
+                        下一页
                       </Button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                </>
               ) : (
                 <EmptyState
                   title="暂无关注"
@@ -457,24 +569,70 @@ export default function ProfilePage() {
               {followersLoading ? (
                 <LoadingState message="加载粉丝列表..." />
               ) : (followersData as any)?.data?.length > 0 ? (
-                <div className="space-y-3">
-                  {(followersData as any)?.data?.map((u: any) => (
-                    <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
-                      <div className="flex items-center gap-3">
-                        <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
-                        <div>
-                          <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400">
-                            关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                <>
+                  <div className="space-y-3">
+                    {(followersData as any)?.data?.map((u: any) => {
+                      // 检查是否互相关注
+                      const isFollowingBack = followingStates[u.id] ?? ((followingData as any)?.data?.some((f: any) => f.id === u.id) || false)
+
+                      return (
+                        <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                          <div
+                            className="flex flex-1 cursor-pointer items-center gap-3"
+                            onClick={() => navigate(`/users/${u.id}`)}>
+                            <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                                {isFollowingBack && (
+                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                    互相关注
+                                  </span>
+                                )}
+                              </div>
+                              <div className="text-xs text-gray-500 dark:text-gray-400">
+                                关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant={isFollowingBack ? "outline" : "primary"}
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                handleToggleFollow(u.id, isFollowingBack)
+                              }}>
+                              {isFollowingBack ? '已关注' : '关注'}
+                            </Button>
                           </div>
                         </div>
-                      </div>
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/users/${u.id}`)}>
-                        查看
+                      )
+                    })}
+                  </div>
+                  {/* 分页控件 */}
+                  <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
+                    <div className="text-sm text-gray-600 dark:text-gray-400">
+                      第 {followersPage} 页，共 {(followersData as any)?.meta?.totalPages || 1} 页
+                    </div>
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={followersPage === 1}
+                        onClick={() => setFollowersPage(p => Math.max(1, p - 1))}>
+                        上一页
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={followersPage >= ((followersData as any)?.meta?.totalPages || 1)}
+                        onClick={() => setFollowersPage(p => p + 1)}>
+                        下一页
                       </Button>
                     </div>
-                  ))}
-                </div>
+                  </div>
+                </>
               ) : (
                 <EmptyState
                   title="暂无粉丝"
@@ -490,146 +648,223 @@ export default function ProfilePage() {
       {/* 动态 */}
       {activeTab === 'activity' && (
         <div>
+          {/* 动态类型切换、排序和统计信息 */}
+          <div className="mb-6 flex items-center justify-between">
+            <div className="flex gap-4">
+              <Button
+                size="sm"
+                variant={activityType === 'all' ? 'primary' : 'outline'}
+                onClick={() => setActivityType('all')}>
+                全部
+              </Button>
+              <Button
+                size="sm"
+                variant={activityType === 'posts' ? 'primary' : 'outline'}
+                onClick={() => setActivityType('posts')}>
+                帖子
+              </Button>
+              <Button
+                size="sm"
+                variant={activityType === 'comments' ? 'primary' : 'outline'}
+                onClick={() => setActivityType('comments')}>
+                评论
+              </Button>
+              <Button
+                size="sm"
+                variant={activityType === 'likes' ? 'primary' : 'outline'}
+                onClick={() => setActivityType('likes')}>
+                点赞
+              </Button>
+              <Button
+                size="sm"
+                variant={activityType === 'favorites' ? 'primary' : 'outline'}
+                onClick={() => setActivityType('favorites')}>
+                收藏
+              </Button>
+            </div>
+
+            {/* 排序和统计信息 */}
+            <div className="flex items-center gap-4">
+              <Button
+                size="sm"
+                variant="primary"
+                onClick={() => setActivitySortDesc(!activitySortDesc)}>
+                {activitySortDesc ? '最新' : '最旧'}
+              </Button>
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                共 {activitiesData?.meta?.total || 0} 条动态
+              </div>
+            </div>
+          </div>
+
           {isActivitiesLoading ? (
             <LoadingState message="加载动态..." />
           ) : activities.length > 0 ? (
             <div className="space-y-4">
-              {activities.map((activity) => (
+              {activities.map((activity: any) => (
                 <Card key={activity.id} className="p-6">
                   <div className="flex items-start gap-4">
-                    {/* 动态类型图标 */}
-                    <div className="flex-shrink-0">
-                      {activity.type === 'NEW_POST' && (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100 text-2xl dark:bg-blue-900">
-                          📝
-                        </div>
-                      )}
-                      {activity.type === 'NEW_COMMENT' && (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-2xl dark:bg-green-900">
-                          💬
-                        </div>
-                      )}
-                      {activity.type === 'NEW_REPLY' && (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-100 text-2xl dark:bg-purple-900">
-                          💭
-                        </div>
-                      )}
-                    </div>
+                    {/* 作者头像 */}
+                    <Link to={`/users/${activity.author.id}`}>
+                      <Avatar
+                        src={activity.author.avatar}
+                        alt={activity.author.username}
+                        username={activity.author.username}
+                        size={48}
+                        seed={activity.author.id}
+                      />
+                    </Link>
 
                     {/* 动态内容 */}
                     <div className="flex-1">
-                      {/* 新帖子动态 */}
-                      {activity.type === 'NEW_POST' && activity.post && (
+                      {/* 新帖子 */}
+                      {activity.type === 'POST' && (
                         <>
-                          <div className="mb-2 flex items-center gap-2">
-                            <Avatar
-                              src={activity.post.author.avatar}
-                              alt={activity.post.author.username}
-                              username={activity.post.author.username}
-                              size={32}
-                              seed={activity.post.author.id}
-                            />
-                            <div>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">
-                                {activity.post.author.nickname || activity.post.author.username}
-                              </span>
-                              <span className="ml-2 text-gray-600 dark:text-gray-400">发布了新帖子</span>
+                          <div className="mb-2">
+                            <Link
+                              to={`/users/${activity.author.id}`}
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              {activity.author.nickname || activity.author.username}
+                            </Link>
+                            <span className="text-gray-600 dark:text-gray-400"> 发布了新帖子</span>
+                          </div>
+                          <Link to={`/posts/${activity.data.id}`}>
+                            <div className="rounded-lg bg-gray-50 p-4 hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700">
+                              <h4 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">
+                                {activity.data.title}
+                              </h4>
+                              <p className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
+                                {activity.content}
+                              </p>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {formatTime(activity.createdAt)}
+                              </div>
+                            </div>
+                          </Link>
+                        </>
+                      )}
+
+                      {/* 评论 */}
+                      {activity.type === 'COMMENT' && (
+                        <>
+                          <div className="mb-2">
+                            <Link
+                              to={`/users/${activity.author.id}`}
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              {activity.author.nickname || activity.author.username}
+                            </Link>
+                            <span className="text-gray-600 dark:text-gray-400"> 发表了评论</span>
+                          </div>
+                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
+                            <p className="text-sm text-gray-700 dark:text-gray-300">
+                              {activity.content}
+                            </p>
+                            <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                              {formatTime(activity.createdAt)}
                             </div>
                           </div>
-                          <div
-                            className="cursor-pointer rounded-lg bg-gray-50 p-4 transition-colors hover:bg-gray-100 dark:bg-gray-800 dark:hover:bg-gray-700"
-                            onClick={() => navigate(`/posts/${activity.post!.id}`)}>
-                            <h4 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">
-                              {activity.post.title}
+                        </>
+                      )}
+
+                      {/* 公告 */}
+                      {activity.type === 'ANNOUNCEMENT' && (
+                        <>
+                          <div className="mb-2">
+                            <Link
+                              to={`/users/${activity.author.id}`}
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              {activity.author.nickname || activity.author.username}
+                            </Link>
+                            <span className="text-gray-600 dark:text-gray-400"> 发布了公告</span>
+                          </div>
+                          <div className="rounded-lg border-l-4 border-blue-500 bg-blue-50 p-4 dark:bg-blue-900/20">
+                            <h4 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
+                              {activity.data.title}
                             </h4>
-                            <p className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">
-                              {activity.post.content.replace(/<[^>]*>/g, '').substring(0, 150)}...
+                            <p className="text-sm text-blue-700 dark:text-blue-300">
+                              {activity.content}
                             </p>
-                          </div>
-                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                            {formatTime(activity.createdAt)}
+                            <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                              {formatTime(activity.createdAt)}
+                            </div>
                           </div>
                         </>
                       )}
 
-                      {/* 新评论动态 */}
-                      {activity.type === 'NEW_COMMENT' && activity.comment && (
+                      {/* 点赞 */}
+                      {activity.type === 'LIKE' && (
                         <>
-                          <div className="mb-2 flex items-center gap-2">
-                            <Avatar
-                              src={activity.comment.author.avatar}
-                              alt={activity.comment.author.username}
-                              username={activity.comment.author.username}
-                              size={32}
-                              seed={activity.comment.author.id}
-                            />
-                            <div>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">
-                                {activity.comment.author.nickname || activity.comment.author.username}
-                              </span>
-                              <span className="ml-2 text-gray-600 dark:text-gray-400">
-                                评论了你的帖子
-                              </span>
-                              <span
-                                className="ml-1 cursor-pointer font-medium text-blue-600 hover:underline dark:text-blue-400"
-                                onClick={() => navigate(`/posts/${activity.comment!.post.id}`)}>
-                                《{activity.comment.post.title}》
-                              </span>
+                          <div className="mb-2">
+                            <Link
+                              to={`/users/${activity.author.id}`}
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              {activity.author.nickname || activity.author.username}
+                            </Link>
+                            <span className="text-gray-600 dark:text-gray-400"> 点赞了</span>
+                          </div>
+                          <Link to={`/posts/${activity.data.id}`}>
+                            <div className="rounded-lg border-l-4 border-red-500 bg-red-50 p-4 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30">
+                              <h4 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">
+                                {activity.data.title}
+                              </h4>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {formatTime(activity.createdAt)}
+                              </div>
                             </div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              {activity.comment.content}
-                            </p>
-                          </div>
-                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                            {formatTime(activity.createdAt)}
-                          </div>
+                          </Link>
                         </>
                       )}
 
-                      {/* 新回复动态 */}
-                      {activity.type === 'NEW_REPLY' && activity.comment && (
+                      {/* 收藏 */}
+                      {activity.type === 'FAVORITE' && (
                         <>
-                          <div className="mb-2 flex items-center gap-2">
-                            <Avatar
-                              src={activity.comment.author.avatar}
-                              alt={activity.comment.author.username}
-                              username={activity.comment.author.username}
-                              size={32}
-                              seed={activity.comment.author.id}
-                            />
-                            <div>
-                              <span className="font-medium text-gray-900 dark:text-gray-100">
-                                {activity.comment.author.nickname || activity.comment.author.username}
-                              </span>
-                              <span className="ml-2 text-gray-600 dark:text-gray-400">
-                                回复了你的评论
-                              </span>
-                              <span className="ml-1 text-gray-600 dark:text-gray-400">
-                                在帖子
-                              </span>
-                              <span
-                                className="ml-1 cursor-pointer font-medium text-blue-600 hover:underline dark:text-blue-400"
-                                onClick={() => navigate(`/posts/${activity.comment!.post.id}`)}>
-                                《{activity.comment.post.title}》
-                              </span>
+                          <div className="mb-2">
+                            <Link
+                              to={`/users/${activity.author.id}`}
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              {activity.author.nickname || activity.author.username}
+                            </Link>
+                            <span className="text-gray-600 dark:text-gray-400"> 收藏了</span>
+                          </div>
+                          <Link to={`/posts/${activity.data.id}`}>
+                            <div className="rounded-lg border-l-4 border-yellow-500 bg-yellow-50 p-4 hover:bg-yellow-100 dark:bg-yellow-900/20 dark:hover:bg-yellow-900/30">
+                              <h4 className="mb-2 font-semibold text-gray-900 dark:text-gray-100">
+                                {activity.data.title}
+                              </h4>
+                              <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                                {formatTime(activity.createdAt)}
+                              </div>
                             </div>
-                          </div>
-                          <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              {activity.comment.content}
-                            </p>
-                          </div>
-                          <div className="mt-2 text-xs text-gray-500 dark:text-gray-500">
-                            {formatTime(activity.createdAt)}
-                          </div>
+                          </Link>
                         </>
                       )}
                     </div>
                   </div>
                 </Card>
               ))}
+
+              {/* 分页控件 */}
+              <div className="mt-6 flex items-center justify-between border-t pt-4 dark:border-gray-700">
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  第 {activityPage} 页，共 {activitiesData?.meta?.totalPages || 1} 页
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={activityPage === 1}
+                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}>
+                    上一页
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    disabled={activityPage >= (activitiesData?.meta?.totalPages || 1)}
+                    onClick={() => setActivityPage(p => p + 1)}>
+                    下一页
+                  </Button>
+                </div>
+              </div>
             </div>
           ) : (
             <EmptyState

@@ -3,7 +3,14 @@ import { api, PaginatedResponse } from '../core/client';
 /**
  * 通知类型
  */
-export type NotificationType = 'COMMENT' | 'REPLY' | 'LIKE' | 'SYSTEM' | 'FOLLOW';
+export type NotificationType =
+  | 'COMMENT'
+  | 'REPLY'
+  | 'LIKE'
+  | 'SYSTEM'
+  | 'FOLLOW'
+  | 'NEW_POST'
+  | 'NEW_FOLLOWER';
 
 /**
  * 通知
@@ -47,6 +54,16 @@ export const notificationApi = {
    */
   getUnreadCount: () => {
     return api.get<{ unreadCount: number }>('/notifications/unread/count');
+  },
+
+  /**
+   * 按 relatedId 批量标记为已读（用于聚合的私信通知）
+   * PATCH /notifications/related/:relatedId/read
+   */
+  markByRelated: (relatedId: string, type?: NotificationType) => {
+    return api.patch<{ message: string; count: number }>(`/notifications/related/${relatedId}/read`, undefined, {
+      params: type ? { type } : undefined,
+    });
   },
 
   /**

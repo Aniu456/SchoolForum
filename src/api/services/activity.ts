@@ -1,24 +1,47 @@
 /**
  * 用户动态 API
- * 根据功能设计文档第23行：显示关注用户的新帖子和收到的新评论
+ * 聚合关注用户的所有活动：新帖子、新评论、公告等
  */
-import apiClient from '../core/client';
-import type { UserActivitiesResponse } from '@/types/activity';
+import { api, PaginatedResponse } from '../core/client';
+
+// 动态流数据类型
+export interface ActivityItem {
+  type: 'POST' | 'COMMENT' | 'ANNOUNCEMENT';
+  id: string;
+  author: {
+    id: string;
+    username: string;
+    nickname: string;
+    avatar: string;
+  };
+  content: string;
+  createdAt: string;
+  data: any; // 完整的帖子/评论/公告数据
+}
 
 const activityApi = {
   /**
+   * 获取关注用户的动态流
+   * 包括：关注用户发布的新帖子、新评论、新公告等
+   * GET /activities/following
+   */
+  getFollowingActivities: async (params?: {
+    page?: number;
+    limit?: number;
+  }): Promise<PaginatedResponse<ActivityItem>> => {
+    return await api.get('/activities/following', { params });
+  },
+
+  /**
    * 获取我的动态
-   * 包括：
-   * 1. 我关注的用户发布的新帖子
-   * 2. 我的帖子收到的新评论
-   * 3. 我的评论收到的新回复
+   * 包括：我发布的帖子、我发表的评论
+   * GET /activities/me
    */
   getMyActivities: async (params?: {
     page?: number;
     limit?: number;
-  }): Promise<UserActivitiesResponse> => {
-    const response = await apiClient.get('/users/me/activities', { params });
-    return response.data;
+  }): Promise<PaginatedResponse<ActivityItem>> => {
+    return await api.get('/activities/me', { params });
   },
 };
 

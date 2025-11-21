@@ -13,11 +13,17 @@ import {
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
 import { useAuthStore } from '@/store/useAuthStore';
+import { notificationApi } from '@/api';
+import { useUIStore } from '@/store/useUIStore';
+import { useQueryClient } from '@tanstack/react-query';
+import websocketService from '@/services/websocket';
 
 export default function ChatPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const navigate = useNavigate();
   const currentUser = useAuthStore((state) => state.user);
+  const { setUnreadNotifications, setActiveConversationId } = useUIStore();
+  const queryClient = useQueryClient();
   const [messageInput, setMessageInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -41,6 +47,48 @@ export default function ChatPage() {
   const messages = messagesData?.data || [];
   const otherUser = conversation?.otherUser;
 
+  // 进入会话时标记相关通知为已读，并刷新通知数
+  useEffect(() => {
+    const markRelatedNotifications = async () => {
+      if (!conversationId) return;
+      try {
+        await notificationApi.markByRelated(conversationId, 'SYSTEM' as any);
+        const unreadRes = await notificationApi.getUnreadCount();
+        setUnreadNotifications(unreadRes.unreadCount || 0);
+        queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+      } catch (err) {
+        console.warn('标记私信通知已读失败', err);
+      }
+    };
+    markRelatedNotifications();
+  }, [conversationId, setUnreadNotifications, queryClient]);
+
+  // 标记当前会话为活跃，离开时清空
+  useEffect(() => {
+    setActiveConversationId(conversationId || null);
+    return () => setActiveConversationId(null);
+  }, [conversationId, setActiveConversationId]);
+
+  // 在聊天中收到对应会话的通知时，立即标记已读并刷新消息
+  useEffect(() => {
+    if (!conversationId) return;
+    const unsubscribe = websocketService.subscribeNotification((notification) => {
+      if (notification?.type === 'SYSTEM' && notification?.relatedId === conversationId) {
+        void refetchMessages();
+        void notificationApi.markByRelated(conversationId, 'SYSTEM' as any);
+        notificationApi.getUnreadCount().then((res) => {
+          setUnreadNotifications(res.unreadCount || 0);
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
+          queryClient.invalidateQueries({ queryKey: ['notifications', 'unread'] });
+        });
+      }
+    });
+    return () => {
+      unsubscribe?.();
+    };
+  }, [conversationId, refetchMessages, setUnreadNotifications, queryClient]);
+
   // 自动滚动到底部
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,6 +99,7 @@ export default function ChatPage() {
     try {
       await deleteMessageMutation.mutateAsync(messageId);
       await refetchMessages();
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
     } catch (error) {
       console.error('删除消息失败:', error);
       alert('删除消息失败，请重试');

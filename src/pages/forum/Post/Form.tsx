@@ -6,7 +6,7 @@ import { useCreatePost, useUpdatePost, usePost } from '@/hooks/usePosts';
 import { useToast } from '@/utils/toast-hook';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LoadingState, RichTextEditor, Button } from '@/components';
-import { saveDraft, deleteDraft, getDraft } from '@/utils/draft';
+import { draftApi } from '@/api';
 import { addActivity } from '@/utils/activity';
 import type { CreatePostRequest } from '@/types';
 
@@ -28,29 +28,36 @@ export default function PostFormPage() {
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
-  const [category, setCategory] = useState('');
   const [tags, setTags] = useState('');
   const [coverImage, setCoverImage] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId);
 
   // 加载草稿或帖子数据
   useEffect(() => {
-    if (draftId) {
-      const draft = getDraft(draftId);
-      if (draft) {
-        setTitle(draft.title || '');
-        setContent(draft.content || '');
-        setCategory(draft.categoryId || '');
-        setTags(draft.tags?.join(', ') || '');
-        setCoverImage(draft.coverImage || '');
+    const loadDraft = async () => {
+      if (draftId) {
+        try {
+          const draft = await draftApi.getDetail(draftId);
+          if (draft) {
+            setTitle(draft.title || '');
+            setContent(draft.content || '');
+            setTags(draft.tags?.join(', ') || '');
+            setCoverImage(draft.images?.[0] || '');
+            setCurrentDraftId(draftId);
+          }
+        } catch (error) {
+          console.error('加载草稿失败:', error);
+          showError('加载草稿失败');
+        }
+      } else if (post && isEdit) {
+        setTitle(post.title);
+        setContent(post.content);
+        setTags(post.tags?.join(', ') || '');
       }
-    } else if (post && isEdit) {
-      setTitle(post.title);
-      setContent(post.content);
-      setCategory(post.categoryId || '');
-      setTags(post.tags?.join(', ') || '');
-    }
-  }, [draftId, post, isEdit]);
+    };
+    loadDraft();
+  }, [draftId, post, isEdit, showError]);
 
   if (!user) {
     navigate('/login');
@@ -106,8 +113,12 @@ export default function PostFormPage() {
         });
 
         // 删除草稿（如果有）
-        if (draftId) {
-          deleteDraft(draftId);
+        if (currentDraftId) {
+          try {
+            await draftApi.delete(currentDraftId);
+          } catch (error) {
+            console.error('删除草稿失败:', error);
+          }
         }
 
         showSuccess('帖子发布成功！');
@@ -120,20 +131,27 @@ export default function PostFormPage() {
     }
   };
 
-  const handleSaveDraft = () => {
-    const draft = {
-      id: draftId || `draft_${Date.now()}`,
-      title,
-      content,
-      categoryId: category,
-      tags: tags.split(',').map((tag) => tag.trim()).filter((tag) => tag),
-      coverImage,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
+  const handleSaveDraft = async () => {
+    try {
+      const tagsArray = tags
+        .split(',')
+        .map((tag) => tag.trim())
+        .filter((tag) => tag);
 
-    saveDraft(draft);
-    showSuccess('草稿已保存');
+      const draftData = {
+        title: title.trim() || undefined,
+        content: content.trim() || undefined,
+        tags: tagsArray.length > 0 ? tagsArray : undefined,
+        images: coverImage ? [coverImage] : undefined,
+      };
+
+      const savedDraft = await draftApi.createOrUpdate(draftData);
+      setCurrentDraftId(savedDraft.id);
+      showSuccess('草稿已保存到服务器');
+    } catch (error) {
+      console.error('保存草稿失败:', error);
+      showError('保存草稿失败，请重试');
+    }
   };
 
   return (

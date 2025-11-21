@@ -13,6 +13,7 @@ import { useComments, useCreateComment } from '@/hooks/useComments'
 // import removed: useLikePost, useUnlikePost
 import { useAuthStore } from '@/store/useAuthStore'
 import NotFoundPage from '@/pages/system/NotFound'
+import { useQueryClient } from '@tanstack/react-query'
 
 // 评论组件（支持嵌套回复）
 function CommentItem({
@@ -123,6 +124,7 @@ export default function PostDetailPage() {
   const { user: currentUser } = useAuthStore()
   const { data: post, isLoading: postLoading, error: postError, refetch: refetchPost } = usePost(id ?? '')
   const { data: commentsData, isLoading: commentsLoading } = useComments(id ?? '')
+  const queryClient = useQueryClient()
   const comments = Array.isArray(commentsData) ? commentsData : commentsData?.data || []
   const createCommentMutation = useCreateComment()
   // API 对接后改用 likesApi.toggle；保留 hooks 引用以兼容类型，但不使用
@@ -163,15 +165,18 @@ export default function PostDetailPage() {
   // 检查关注状态
   useEffect(() => {
     const authorId = post?.author?.id
-    if (!authorId || !currentUser || authorId === currentUser.id) {
+    const userId = currentUser?.id
+
+    if (!authorId || !userId || authorId === userId) {
       setIsFollowingAuthor(false)
       return
     }
+
     followApi
       .checkFollowing(authorId)
       .then((res) => setIsFollowingAuthor(!!res.isFollowing))
       .catch(() => setIsFollowingAuthor(false))
-  }, [post?.author?.id, currentUser?.id, currentUser])
+  }, [post?.author?.id, currentUser?.id])
 
   if (!id) {
     return <NotFoundPage />
@@ -233,15 +238,41 @@ export default function PostDetailPage() {
     try {
       if (isFollowingAuthor) {
         await followApi.unfollowUser(post.author.id)
-        setIsFollowingAuthor(false)
         showSuccess('已取消关注')
       } else {
         await followApi.followUser(post.author.id)
-        setIsFollowingAuthor(true)
         showSuccess('已关注作者')
       }
-    } catch {
-      showError('关注操作失败，请稍后再试')
+
+      // 刷新缓存
+      await queryClient.invalidateQueries({ queryKey: ['user', post.author.id] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.invalidateQueries({ queryKey: ['followers'] })
+      await queryClient.invalidateQueries({ queryKey: ['following'] })
+
+      // 重新检查关注状态，确保与后端同步
+      const { isFollowing } = await followApi.checkFollowing(post.author.id)
+      setIsFollowingAuthor(isFollowing)
+    } catch (error: any) {
+      console.error('关注操作错误:', error)
+
+      // 检查错误信息的多个可能位置
+      const errorMessage = error?.message || error?.response?.data?.message || error?.data?.message || ''
+
+      // 如果是已经关注的错误，重新检查状态
+      if (errorMessage.includes('已经关注') || errorMessage.includes('已关注')) {
+        showSuccess('已关注')
+        await queryClient.invalidateQueries({ queryKey: ['user', post.author.id] })
+        const { isFollowing } = await followApi.checkFollowing(post.author.id)
+        setIsFollowingAuthor(isFollowing)
+      } else if (errorMessage.includes('未关注') || errorMessage.includes('未找到关注')) {
+        showSuccess('已取消关注')
+        await queryClient.invalidateQueries({ queryKey: ['user', post.author.id] })
+        const { isFollowing } = await followApi.checkFollowing(post.author.id)
+        setIsFollowingAuthor(isFollowing)
+      } else {
+        showError(`关注操作失败：${errorMessage || '请稍后再试'}`)
+      }
     }
   }
 
@@ -270,6 +301,10 @@ export default function PostDetailPage() {
       const res = await likeApi.toggleLike({ targetId: post.id, targetType: 'POST' })
       setLocalIsLiked(res.isLiked)
       setLocalLikes(res.likeCount)
+      // 刷新缓存并重新获取数据
+      await queryClient.invalidateQueries({ queryKey: ['post', post.id] })
+      await queryClient.invalidateQueries({ queryKey: ['posts'] })
+      await refetchPost()
     } catch {
       showError('操作失败，请重试')
     }
@@ -283,10 +318,11 @@ export default function PostDetailPage() {
     if (localCollected && favoriteRecordId) {
       try {
         await favoriteApi.deleteFavorite(favoriteRecordId)
-        setLocalCollected(false)
-        setFavoriteRecordId(null)
-        setFavoriteCount((count) => Math.max(0, count - 1))
         showSuccess('已取消收藏')
+        // 刷新缓存并重新获取数据
+        await queryClient.invalidateQueries({ queryKey: ['post', post.id] })
+        await queryClient.invalidateQueries({ queryKey: ['posts'] })
+        await refetchPost()
       } catch {
         showError('取消收藏失败，请重试')
       }
@@ -301,11 +337,12 @@ export default function PostDetailPage() {
       const folderList = (res as any)?.data || []
       if (!folderList || folderList.length === 0) {
         const created = await favoriteApi.createFolder({ name: '默认收藏夹' })
-        const favorite = await favoriteApi.createFavorite({ postId: post.id, folderId: created.id })
-        setLocalCollected(true)
-        setFavoriteRecordId(favorite.id)
-        setFavoriteCount((count) => count + 1)
+        await favoriteApi.createFavorite({ postId: post.id, folderId: created.id })
         showSuccess('已加入默认收藏夹')
+        // 刷新缓存并重新获取数据
+        await queryClient.invalidateQueries({ queryKey: ['post', post.id] })
+        await queryClient.invalidateQueries({ queryKey: ['posts'] })
+        await refetchPost()
         return
       }
       setFolders(folderList)
@@ -322,13 +359,14 @@ export default function PostDetailPage() {
       return
     }
     try {
-      const favorite = await favoriteApi.createFavorite({ postId: post.id, folderId: selectedFolderId, note: favoriteNote || undefined })
+      await favoriteApi.createFavorite({ postId: post.id, folderId: selectedFolderId, note: favoriteNote || undefined })
       setShowFavoriteDialog(false)
       setFavoriteNote('')
-      setLocalCollected(true)
-      setFavoriteRecordId(favorite.id)
-      setFavoriteCount((count) => count + 1)
       showSuccess('已加入收藏')
+      // 刷新缓存并重新获取数据
+      await queryClient.invalidateQueries({ queryKey: ['post', post.id] })
+      await queryClient.invalidateQueries({ queryKey: ['posts'] })
+      await refetchPost()
     } catch {
       showError('收藏失败，请重试')
     }
@@ -358,6 +396,8 @@ export default function PostDetailPage() {
       setReplyTo(null)
 
       showSuccess('评论发布成功')
+      queryClient.invalidateQueries({ queryKey: ['post', post.id] })
+      queryClient.invalidateQueries({ queryKey: ['posts'] })
     } catch {
       showError('评论发布失败，请重试')
     }
@@ -384,9 +424,9 @@ export default function PostDetailPage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
       {/* 帖子内容 */}
-      <article className="mb-8 rounded-lg border border-gray-200 bg-white p-8 dark:border-gray-800 dark:bg-gray-900">
+      <article className="mb-8 overflow-hidden rounded-3xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-800 dark:bg-gray-900 md:p-8">
         {/* 标签和分类 */}
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2">
             {post.isPinned && <span className="rounded bg-red-500 px-2 py-1 text-xs text-white">置顶</span>}
             {post.isHot && <span className="rounded bg-orange-500 px-2 py-1 text-xs text-white">热门</span>}
@@ -408,10 +448,10 @@ export default function PostDetailPage() {
         </div>
 
         {/* 标题 */}
-        <h1 className="mb-4 text-3xl font-bold text-gray-900 dark:text-gray-100">{post.title}</h1>
+        <h1 className="mb-3 text-3xl font-bold text-gray-900 dark:text-gray-100">{post.title}</h1>
 
         {/* 作者信息 */}
-        <div className="mb-6 flex items-center justify-between border-b border-gray-200 pb-4 dark:border-gray-800">
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 pb-4 dark:border-gray-800">
           {post.author && (
             <div className="flex items-center gap-4">
               <Link to={`/users/${post.author.id}`}>
@@ -437,15 +477,15 @@ export default function PostDetailPage() {
             <div className="flex items-center gap-2">
               <button
                 onClick={handleFollowAuthor}
-                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${isFollowingAuthor
-                    ? 'border-green-500 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:text-green-200'
-                    : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-500'
+                className={`rounded-full px-4 py-2 text-sm font-medium transition ${isFollowingAuthor
+                  ? 'border border-green-500 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:text-green-200'
+                  : 'border border-blue-500 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-500'
                   }`}>
                 {isFollowingAuthor ? '已关注' : '关注'}
               </button>
               <button
                 onClick={handleMessageAuthor}
-                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                className="rounded-full border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 transition hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
                 私信
               </button>
             </div>
@@ -475,32 +515,34 @@ export default function PostDetailPage() {
         )}
 
         {/* 操作按钮 */}
-        <div className="flex items-center gap-4 border-t border-gray-200 pt-4 dark:border-gray-800">
+        <div className="mt-6 grid grid-cols-2 gap-3 border-t border-gray-200 pt-4 dark:border-gray-800 md:grid-cols-4">
           <button
             onClick={handleLike}
-            className={`flex items-center gap-2 rounded-lg border px-4 py-2 transition-colors ${localIsLiked
-                ? 'border-blue-500 bg-blue-50 text-blue-600 dark:border-blue-400 dark:bg-blue-900/20 dark:text-blue-400'
-                : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition ${localIsLiked
+              ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200 dark:bg-blue-900/20 dark:text-blue-300'
+              : 'bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200'
               }`}>
-            👍 {localLikes}
+            👍 赞 {localLikes}
           </button>
-          <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-            💬 {comments.length}
+          <button className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+            💬 评论 {comments.length}
           </button>
           {currentUser && (
             <button
               onClick={handleCollect}
-              className={`flex items-center gap-2 rounded-lg border px-4 py-2 transition-colors ${localCollected
-                  ? 'border-yellow-500 bg-yellow-50 text-yellow-600 dark:border-yellow-400 dark:bg-yellow-900/20 dark:text-yellow-400'
-                  : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+              className={`flex items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition ${localCollected
+                ? 'bg-amber-50 text-amber-600 ring-1 ring-amber-200 dark:bg-amber-900/20 dark:text-amber-200'
+                : 'bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200'
                 }`}>
-              ⭐ {favoriteCount}
+              ⭐ 收藏 {favoriteCount}
             </button>
           )}
-          <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-            👁️ {post.viewCount}
+          <button className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
+            👁️ 浏览 {post.viewCount}
           </button>
-          <ShareButton url={`/posts/${post.id}`} title={post.title} description={stripHtml(post.content)} />
+          <div className="md:col-span-2">
+            <ShareButton url={`/posts/${post.id}`} title={post.title} description={stripHtml(post.content)} />
+          </div>
         </div>
       </article>
 

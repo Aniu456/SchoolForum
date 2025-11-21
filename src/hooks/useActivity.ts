@@ -17,8 +17,19 @@ export const activityKeys = {
 // ============================================
 
 /**
+ * 获取关注用户的动态流
+ * 包括：关注用户发布的新帖子、新评论、新公告等
+ */
+export const useFollowingActivities = (params?: { page?: number; limit?: number }) => {
+  return useQuery({
+    queryKey: [...activityKeys.all, 'following', params],
+    queryFn: () => activityApi.getFollowingActivities(params),
+  });
+};
+
+/**
  * 获取我的动态
- * 包括：关注用户的新帖子、我收到的新评论等
+ * 包括：我发布的帖子、我发表的评论
  */
 export const useMyActivities = (params?: { page?: number; limit?: number }) => {
   return useQuery({

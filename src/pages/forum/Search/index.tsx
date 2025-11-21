@@ -1,8 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { PostCard, Avatar, EmptyState, LoadingState, Button, Card } from '@/components'
-import { searchApi } from '@/api'
+import { searchApi, followApi } from '@/api'
 import { Post, User } from '@/types'
+import { useAuthStore } from '@/store/useAuthStore'
+import { useQueryClient } from '@tanstack/react-query'
+import { useToast } from '@/utils/toast-hook'
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
@@ -15,6 +18,13 @@ export default function SearchPage() {
   const [users, setUsers] = useState<User[]>([])
   const [loadingPosts, setLoadingPosts] = useState(false)
   const [loadingUsers, setLoadingUsers] = useState(false)
+
+  // 关注功能
+  const { user: currentUser } = useAuthStore()
+  const queryClient = useQueryClient()
+  const { showSuccess, showError } = useToast()
+  const [followingStates, setFollowingStates] = useState<Record<string, boolean>>({})
+  const [followingLoading, setFollowingLoading] = useState<Record<string, boolean>>({})
 
   // 同步 URL 参数到本地状态
   useEffect(() => {
@@ -60,6 +70,26 @@ export default function SearchPage() {
 
         setPosts(postsRes.data as Post[])
         setUsers(usersRes.data as User[])
+
+        // 检查关注状态
+        if (currentUser && usersRes.data) {
+          const userList = usersRes.data as User[]
+          const followStates: Record<string, boolean> = {}
+          await Promise.all(
+            userList.map(async (u) => {
+              if (u.id !== currentUser.id) {
+                try {
+                  const { isFollowing } = await followApi.checkFollowing(u.id)
+                  followStates[u.id] = isFollowing
+                } catch (error) {
+                  console.error(`检查关注状态失败:`, error)
+                  followStates[u.id] = false
+                }
+              }
+            })
+          )
+          setFollowingStates(followStates)
+        }
       } finally {
         setLoadingPosts(false)
         setLoadingUsers(false)
@@ -67,7 +97,7 @@ export default function SearchPage() {
     }
 
     searchAll()
-  }, [query, searchParams])
+  }, [query, searchParams, currentUser])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
@@ -78,6 +108,51 @@ export default function SearchPage() {
     }
     if (raw) {
       setSearchParams({ q: raw })
+    }
+  }
+
+  // 关注/取消关注
+  const handleToggleFollow = async (userId: string, currentlyFollowing: boolean) => {
+    if (!currentUser) {
+      showError('请先登录')
+      return
+    }
+
+    setFollowingLoading(prev => ({ ...prev, [userId]: true }))
+
+    try {
+      if (currentlyFollowing) {
+        await followApi.unfollowUser(userId)
+        showSuccess('已取消关注')
+      } else {
+        await followApi.followUser(userId)
+        showSuccess('关注成功')
+      }
+
+      // 刷新缓存
+      await queryClient.invalidateQueries({ queryKey: ['user', userId] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.invalidateQueries({ queryKey: ['followers'] })
+      await queryClient.invalidateQueries({ queryKey: ['following'] })
+
+      // 重新检查关注状态
+      const { isFollowing } = await followApi.checkFollowing(userId)
+      setFollowingStates(prev => ({ ...prev, [userId]: isFollowing }))
+    } catch (error: any) {
+      console.error('关注操作错误:', error)
+      const errorMessage = error?.message || error?.response?.data?.message || error?.data?.message || ''
+
+      if (errorMessage.includes('已经关注') || errorMessage.includes('已关注')) {
+        showSuccess('已关注')
+        setFollowingStates(prev => ({ ...prev, [userId]: true }))
+      } else if (errorMessage.includes('未关注')) {
+        showSuccess('已取消关注')
+        setFollowingStates(prev => ({ ...prev, [userId]: false }))
+      } else {
+        showError(`操作失败：${errorMessage || '请重试'}`)
+      }
+    } finally {
+      setFollowingLoading(prev => ({ ...prev, [userId]: false }))
     }
   }
 
@@ -159,37 +234,57 @@ export default function SearchPage() {
               <p className="mb-4 text-gray-600 dark:text-gray-400">找到 {curUsers.length} 个相关用户</p>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {curUsers.length > 0 ? (
-                  curUsers.map((user) => (
-                    <Card key={user.id} className="p-6 transition-shadow hover:shadow-md">
-                      <Link to={`/users/${user.id}`} className="flex items-start gap-4">
-                        <Avatar
-                          src={user.avatar}
-                          alt={user.username}
-                          username={user.username}
-                          size={56}
-                          seed={user.id}
-                        />
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
-                              {user.nickname || user.username}
-                            </h3>
-                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
-                              @{user.username}
-                            </span>
-                          </div>
-                          {user.bio && (
-                            <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{user.bio}</p>
+                  curUsers.map((user) => {
+                    const isCurrentUser = currentUser?.id === user.id
+                    const isFollowing = followingStates[user.id] || false
+                    const isLoading = followingLoading[user.id] || false
+
+                    return (
+                      <Card key={user.id} className="p-6 transition-shadow hover:shadow-md">
+                        <div className="flex items-start justify-between gap-4">
+                          <Link to={`/users/${user.id}`} className="flex items-start gap-4">
+                            <Avatar
+                              src={user.avatar}
+                              alt={user.username}
+                              username={user.username}
+                              size={56}
+                              seed={user.id}
+                            />
+                            <div className="flex-1">
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                                  {user.nickname || user.username}
+                                </h3>
+                                <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                                  @{user.username}
+                                </span>
+                              </div>
+                              {user.bio && (
+                                <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{user.bio}</p>
+                              )}
+                              <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400">
+                                <span>帖子 {user.postCount ?? user._count?.posts ?? 0}</span>
+                                <span>关注 {user.followingCount ?? user.following ?? 0}</span>
+                                <span>粉丝 {user.followerCount ?? user.followersCount ?? user.followers ?? 0}</span>
+                              </div>
+                            </div>
+                          </Link>
+                          {!isCurrentUser && currentUser && (
+                            <Button
+                              size="sm"
+                              variant={isFollowing ? "outline" : "primary"}
+                              disabled={isLoading}
+                              onClick={(e) => {
+                                e.preventDefault()
+                                handleToggleFollow(user.id, isFollowing)
+                              }}>
+                              {isLoading ? '处理中...' : (isFollowing ? '已关注' : '关注')}
+                            </Button>
                           )}
-                          <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400">
-                            <span>帖子 {user.postCount ?? user._count?.posts ?? 0}</span>
-                            <span>关注 {user.followingCount ?? user.following ?? 0}</span>
-                            <span>粉丝 {user.followerCount ?? user.followersCount ?? user.followers ?? 0}</span>
-                          </div>
                         </div>
-                      </Link>
-                    </Card>
-                  ))
+                      </Card>
+                    )
+                  })
                 ) : (
                   <div className="col-span-full">
                     <EmptyState title="没有找到相关用户" description="试试其他关键词" icon="👤" />

@@ -1,7 +1,7 @@
 /**
  * 关注 API
  */
-import client from '../core/client';
+import { api } from '../core/client';
 import type { User, PaginatedResponse } from '@/types';
 
 export interface FollowResponse {
@@ -19,48 +19,42 @@ const followApi = {
    * 关注用户
    */
   followUser: async (userId: string): Promise<FollowResponse> => {
-    const response = await client.post(`/users/${userId}/follow`);
-    return response.data;
+    return await api.post(`/users/${userId}/follow`);
   },
 
   /**
    * 取消关注
    */
   unfollowUser: async (userId: string): Promise<FollowResponse> => {
-    const response = await client.delete(`/users/${userId}/follow`);
-    return response.data;
+    return await api.delete(`/users/${userId}/follow`);
   },
 
   /**
    * 获取关注列表
    */
   getFollowing: async (userId: string, params?: FollowQueryParams): Promise<PaginatedResponse<User>> => {
-    const response = await client.get(`/users/${userId}/following`, { params });
-    return response.data;
+    return await api.get(`/users/${userId}/following`, { params });
   },
 
   /**
    * 获取粉丝列表
    */
   getFollowers: async (userId: string, params?: FollowQueryParams): Promise<PaginatedResponse<User>> => {
-    const response = await client.get(`/users/${userId}/followers`, { params });
-    return response.data;
+    return await api.get(`/users/${userId}/followers`, { params });
   },
 
   /**
    * 检查是否关注
    */
   checkFollowing: async (userId: string): Promise<{ isFollowing: boolean }> => {
-    const response = await client.get(`/users/${userId}/follow/status`);
-    return response.data;
+    return await api.get(`/users/${userId}/follow/status`);
   },
 
   /**
    * 获取互相关注列表（好友）
    */
   getMutualFollows: async (userId: string, params?: FollowQueryParams): Promise<PaginatedResponse<User>> => {
-    const response = await client.get(`/users/${userId}/mutual-follows`, { params });
-    return response.data;
+    return await api.get(`/users/${userId}/mutual-follows`, { params });
   },
 };
 

@@ -11,6 +11,7 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { usePosts } from '@/hooks/usePosts'
 import NotFoundPage from '@/pages/system/NotFound'
 import type { Post } from '@/types'
+import { useQueryClient } from '@tanstack/react-query'
 
 export default function UserDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -22,12 +23,16 @@ export default function UserDetailPage() {
   const userPosts = Array.isArray(userPostsData) ? userPostsData : userPostsData?.data || []
   const [following, setFollowing] = useState(false)
   const [activeTab, setActiveTab] = useState<'posts' | 'collections' | 'following' | 'followers'>('posts')
+  const queryClient = useQueryClient()
 
   const filteredUserPosts = userPosts.filter((post: Post) => post.author && post.author.id === id)
 
   useEffect(() => {
     const checkFollow = async () => {
-      if (user && currentUser && id) {
+      const userId = user?.id
+      const currUserId = currentUser?.id
+
+      if (userId && currUserId && id) {
         try {
           const { isFollowing } = await followApi.checkFollowing(id)
           setFollowing(isFollowing)
@@ -37,7 +42,7 @@ export default function UserDetailPage() {
       }
     }
     checkFollow()
-  }, [user, currentUser, id])
+  }, [user?.id, currentUser?.id, id])
 
   if (!id) {
     return <NotFoundPage />
@@ -94,15 +99,44 @@ export default function UserDetailPage() {
     try {
       if (following) {
         await followApi.unfollowUser(id)
-        setFollowing(false)
         showSuccess('已取消关注')
       } else {
         await followApi.followUser(id)
-        setFollowing(true)
         showSuccess('关注成功')
       }
-    } catch (error) {
-      showError('操作失败，请重试')
+
+      // 刷新缓存
+      await queryClient.invalidateQueries({ queryKey: ['user', id] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      await queryClient.invalidateQueries({ queryKey: ['followers'] })
+      await queryClient.invalidateQueries({ queryKey: ['following'] })
+
+      // 重新检查关注状态，确保与后端同步
+      const { isFollowing } = await followApi.checkFollowing(id)
+      setFollowing(isFollowing)
+    } catch (error: any) {
+      console.error('关注操作错误:', error)
+
+      // 检查错误信息的多个可能位置
+      const errorMessage = error?.message || error?.response?.data?.message || error?.data?.message || ''
+
+      // 如果是已经关注的错误，直接更新状态
+      if (errorMessage.includes('已经关注') || errorMessage.includes('已关注')) {
+        setFollowing(true)
+        showSuccess('已关注')
+        // 刷新缓存确保数据一致
+        await queryClient.invalidateQueries({ queryKey: ['user', id] })
+        const { isFollowing } = await followApi.checkFollowing(id)
+        setFollowing(isFollowing)
+      } else if (errorMessage.includes('未关注') || errorMessage.includes('未找到关注')) {
+        setFollowing(false)
+        showSuccess('已取消关注')
+        await queryClient.invalidateQueries({ queryKey: ['user', id] })
+        const { isFollowing } = await followApi.checkFollowing(id)
+        setFollowing(isFollowing)
+      } else {
+        showError(`操作失败：${errorMessage || '请重试'}`)
+      }
     }
   }
 
@@ -195,8 +229,8 @@ export default function UserDetailPage() {
         <button
           onClick={() => setActiveTab('posts')}
           className={`px-4 py-2 font-semibold transition-colors ${activeTab === 'posts'
-              ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-              : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+            ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
             }`}>
           帖子 ({filteredUserPosts.length})
         </button>

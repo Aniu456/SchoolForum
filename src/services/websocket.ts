@@ -120,12 +120,29 @@ class WebSocketService {
         this.socket?.on('notification:new', callback)
     }
 
+    subscribeNotification(callback: (notification: any) => void) {
+        if (!this.socket) return () => undefined
+        const handler = (data: any) => callback(data)
+        this.socket.on('notification:new', handler)
+        return () => {
+            this.socket?.off('notification:new', handler)
+        }
+    }
+
     onLike(callback: (data: any) => void) {
         this.socket?.on('like', callback)
     }
 
     onComment(callback: (data: any) => void) {
         this.socket?.on('comment', callback)
+    }
+
+    onPost(callback: (data: any) => void) {
+        this.socket?.on('post:new', callback)
+    }
+
+    onAnnouncement(callback: (data: any) => void) {
+        this.socket?.on('announcement:new', callback)
     }
 
     markNotificationRead(notificationId: string) {
