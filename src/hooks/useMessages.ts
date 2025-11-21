@@ -7,7 +7,6 @@ import type {
   SendMessageRequest,
   CreateConversationRequest,
   GetMessagesRequest,
-  MarkMessagesAsReadRequest,
 } from '@/types/message';
 
 // ============================================
@@ -101,31 +100,6 @@ export const useSendMessage = () => {
 };
 
 /**
- * 标记消息为已读
- */
-export const useMarkAsRead = () => {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: (data: MarkMessagesAsReadRequest) => messageApi.markAsRead(data),
-    onSuccess: (_, variables) => {
-      // 更新会话列表
-      queryClient.invalidateQueries({ queryKey: messageKeys.conversations() });
-      // 更新会话详情
-      queryClient.invalidateQueries({
-        queryKey: messageKeys.conversation(variables.conversationId),
-      });
-      // 更新消息列表
-      queryClient.invalidateQueries({
-        queryKey: messageKeys.messages(variables.conversationId),
-      });
-      // 更新未读数
-      queryClient.invalidateQueries({ queryKey: messageKeys.unreadCount() });
-    },
-  });
-};
-
-/**
  * 删除消息
  */
 export const useDeleteMessage = () => {
@@ -135,6 +109,22 @@ export const useDeleteMessage = () => {
     mutationFn: (messageId: string) => messageApi.deleteMessage(messageId),
     onSuccess: () => {
       // 刷新所有消息相关的查询
+      queryClient.invalidateQueries({ queryKey: messageKeys.all });
+    },
+  });
+};
+
+/**
+ * 删除会话
+ */
+export const useDeleteConversation = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (conversationId: string) =>
+      messageApi.deleteConversation(conversationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: messageKeys.conversations() });
       queryClient.invalidateQueries({ queryKey: messageKeys.all });
     },
   });

@@ -8,7 +8,7 @@ import {
   useConversation,
   useMessages,
   useSendMessage,
-  useMarkAsRead,
+  useDeleteMessage,
 } from '@/hooks/useMessages';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
@@ -21,14 +21,22 @@ export default function ChatPage() {
   const [messageInput, setMessageInput] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
-  const { data: conversation } = useConversation(conversationId!);
-  const { data: messagesData, isLoading } = useMessages({
-    conversationId: conversationId!,
+  // 验证 conversationId 是否存在
+  useEffect(() => {
+    if (!conversationId) {
+      console.error('缺少会话 ID');
+      navigate('/messages', { replace: true });
+    }
+  }, [conversationId, navigate]);
+
+  const { data: conversation, isError: conversationError } = useConversation(conversationId || '');
+  const { data: messagesData, isLoading, refetch: refetchMessages } = useMessages({
+    conversationId: conversationId || '',
     page: 1,
     limit: 100,
   });
   const sendMessageMutation = useSendMessage();
-  const markAsReadMutation = useMarkAsRead();
+  const deleteMessageMutation = useDeleteMessage();
 
   const messages = messagesData?.data || [];
   const otherUser = conversation?.otherUser;
@@ -38,43 +46,57 @@ export default function ChatPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
 
+  const handleDelete = async (messageId: string) => {
+    if (!messageId) return;
+    try {
+      await deleteMessageMutation.mutateAsync(messageId);
+      await refetchMessages();
+    } catch (error) {
+      console.error('删除消息失败:', error);
+      alert('删除消息失败，请重试');
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages]);
 
-  // 标记消息为已读
-  useEffect(() => {
-    if (conversationId && messages.length > 0) {
-      const unreadMessages = messages.filter(
-        (msg) => !msg.isRead && msg.receiverId === currentUser?.id
-      );
-      if (unreadMessages.length > 0) {
-        markAsReadMutation.mutate({
-          conversationId,
-          messageIds: unreadMessages.map((msg) => msg.id),
-        });
-      }
-    }
-  }, [conversationId, messages, currentUser?.id]);
-
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!messageInput.trim() || !otherUser) return;
+    if (!messageInput.trim() || !conversationId) return;
 
     try {
       await sendMessageMutation.mutateAsync({
-        receiverId: otherUser.id,
+        conversationId,
         content: messageInput.trim(),
       });
       setMessageInput('');
       scrollToBottom();
     } catch (error) {
       console.error('发送消息失败:', error);
+      alert('发送消息失败，请重试');
     }
   };
 
+  // 如果没有 conversationId，不渲染内容（useEffect 会处理重定向）
   if (!conversationId) {
     return null;
+  }
+
+  // 如果会话加载失败，显示错误
+  if (conversationError) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-center dark:border-red-800 dark:bg-red-900/20">
+          <p className="text-red-600 dark:text-red-400">加载会话失败，请返回重试</p>
+          <button
+            onClick={() => navigate('/messages')}
+            className="mt-4 rounded-lg bg-blue-600 px-4 py-2 text-white hover:bg-blue-700">
+            返回消息列表
+          </button>
+        </div>
+      </div>
+    );
   }
 
   if (isLoading) {
@@ -152,23 +174,31 @@ export default function ChatPage() {
                   key={message.id}
                   className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[70%] rounded-lg px-4 py-2 ${
-                      isMyMessage
-                        ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100'
-                    }`}>
+                    className={`max-w-[70%] rounded-lg px-4 py-2 ${isMyMessage
+                      ? 'bg-blue-600 text-white'
+                      : 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100'
+                      }`}>
                     <p className="break-words">{message.content}</p>
                     <p
-                      className={`mt-1 text-xs ${
-                        isMyMessage
-                          ? 'text-blue-200'
-                          : 'text-gray-500 dark:text-gray-400'
-                      }`}>
+                      className={`mt-1 text-xs ${isMyMessage
+                        ? 'text-blue-200'
+                        : 'text-gray-500 dark:text-gray-400'
+                        }`}>
                       {formatDistanceToNow(new Date(message.createdAt), {
                         addSuffix: true,
                         locale: zhCN,
                       })}
                     </p>
+                    {isMyMessage && (
+                      <div className="mt-1 text-right text-xs text-gray-200/80 dark:text-gray-400">
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(message.id)}
+                          className="underline decoration-dotted hover:text-white dark:hover:text-gray-100">
+                          删除
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               );

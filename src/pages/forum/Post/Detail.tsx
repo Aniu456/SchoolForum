@@ -7,7 +7,7 @@ import { formatTime } from '@/utils/format'
 import { stripHtml } from '@/utils/helpers'
 import { Comment } from '@/types'
 import { useToast } from '@/utils/toast-hook'
-import { likeApi, favoriteApi } from '@/api'
+import { likeApi, favoriteApi, followApi, messageApi } from '@/api'
 import { usePost } from '@/hooks/usePosts'
 import { useComments, useCreateComment } from '@/hooks/useComments'
 // import removed: useLikePost, useUnlikePost
@@ -41,9 +41,9 @@ function CommentItem({
   }
 
   return (
-    <div className={`${depth > 0 ? 'ml-12 border-l-2 border-gray-200 pl-4 dark:border-gray-700' : ''}`}>
-      <div className="border-b border-gray-200 py-4 dark:border-gray-800 last:border-b-0">
-        <div className="flex items-start gap-4">
+    <div className={depth > 0 ? 'ml-6 border-l border-gray-200 pl-4 dark:border-gray-700' : ''}>
+      <div className="border-b border-gray-100 pb-4 dark:border-gray-800">
+        <div className="flex items-start gap-3">
           {comment.author && (
             <Avatar
               src={comment.author.avatar}
@@ -54,7 +54,7 @@ function CommentItem({
             />
           )}
           <div className="flex-1">
-            <div className="mb-2 flex items-center gap-2">
+            <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
               {comment.author && (
                 <Link
                   to={`/users/${comment.author.id}`}
@@ -72,20 +72,21 @@ function CommentItem({
                   </Link>
                 </>
               )}
-              <span className="text-sm text-gray-500 dark:text-gray-400">{formatTime(comment.createdAt)}</span>
+              <span>· {formatTime(comment.createdAt)}</span>
             </div>
             <div
-              className="prose prose-sm max-w-none wrap-break-word text-gray-700 dark:prose-invert dark:text-gray-300"
+              className="prose prose-sm mt-1 max-w-none wrap-break-word text-gray-700 dark:prose-invert dark:text-gray-300"
               dangerouslySetInnerHTML={{ __html: comment.content }}
             />
-            <div className="mt-2 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-              <Button variant="ghost" size="sm" onClick={handleLike}>
-                👍 {likes}
-              </Button>
-              {depth < 2 && comment.author && (
-                <Button
-                  variant="link"
-                  size="sm"
+            <div className="mt-2 flex items-center gap-3 text-sm text-gray-500 dark:text-gray-400">
+              <button
+                onClick={handleLike}
+                className="flex items-center gap-1 text-gray-500 transition hover:text-blue-600 dark:hover:text-blue-300">
+                <span>👍</span>
+                <span>{likes}</span>
+              </button>
+              {comment.author && (
+                <button
                   onClick={() => {
                     onReply(comment.id, comment.author!.username)
                     setTimeout(() => {
@@ -94,17 +95,18 @@ function CommentItem({
                         commentInput.scrollIntoView({ behavior: 'smooth', block: 'center' })
                       }
                     }, 100)
-                  }}>
+                  }}
+                  className="text-blue-600 hover:underline dark:text-blue-400">
                   回复
-                </Button>
+                </button>
               )}
             </div>
           </div>
         </div>
       </div>
-      {/* 嵌套回复 */}
+      {/* 嵌套回复 - 不限制层级 */}
       {comment.replies && comment.replies.length > 0 && (
-        <div className="mt-2">
+        <div className="mt-3 space-y-3">
           {comment.replies.map((reply) => (
             <CommentItem key={reply.id} comment={reply} onReply={onReply} depth={depth + 1} />
           ))}
@@ -127,6 +129,7 @@ export default function PostDetailPage() {
 
   const [commentContent, setCommentContent] = useState('')
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
+  const [isFollowingAuthor, setIsFollowingAuthor] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [showFavoriteDialog, setShowFavoriteDialog] = useState(false)
   const [folders, setFolders] = useState<any[]>([])
@@ -134,28 +137,41 @@ export default function PostDetailPage() {
   const [favoriteNote, setFavoriteNote] = useState('')
 
   // 使用 post 数据直接计算状态
-  const baseIsLiked = post?.isLikedByMe || post?.isLiked || false
-  const baseLikes = post?.likeCount || 0
-  const baseCollected = false
+  const baseIsLiked = post?.isLikedByMe ?? post?.isLiked ?? false
+  const baseLikes = post?.likeCount ?? 0
+  const baseCollected = post?.isFavorited ?? false
+  const baseCollectedCount = post?.collectedCount ?? 0
 
   // 本地状态用于乐观更新
   const [localIsLiked, setLocalIsLiked] = useState(baseIsLiked)
   const [localLikes, setLocalLikes] = useState(baseLikes)
   const [localCollected, setLocalCollected] = useState(baseCollected)
+  const [favoriteCount, setFavoriteCount] = useState(baseCollectedCount)
+  const [favoriteRecordId, setFavoriteRecordId] = useState<string | null>(null)
 
   // 同步 post 数据到本地状态（用于乐观更新）
   useEffect(() => {
     if (post) {
-      setLocalIsLiked(baseIsLiked)
-      setLocalLikes(baseLikes)
+      setLocalIsLiked(post.isLikedByMe ?? post.isLiked ?? false)
+      setLocalLikes(post.likeCount ?? 0)
+      setLocalCollected(post.isFavorited ?? false)
+      setFavoriteCount(post.collectedCount ?? 0)
+      setFavoriteRecordId(null)
     }
-    if (post && currentUser) {
-      setLocalCollected(baseCollected)
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [post?.id, currentUser?.id])
+  }, [post, currentUser?.id])
 
-  useEffect(() => { }, [])
+  // 检查关注状态
+  useEffect(() => {
+    const authorId = post?.author?.id
+    if (!authorId || !currentUser || authorId === currentUser.id) {
+      setIsFollowingAuthor(false)
+      return
+    }
+    followApi
+      .checkFollowing(authorId)
+      .then((res) => setIsFollowingAuthor(!!res.isFollowing))
+      .catch(() => setIsFollowingAuthor(false))
+  }, [post?.author?.id, currentUser?.id, currentUser])
 
   if (!id) {
     return <NotFoundPage />
@@ -207,6 +223,43 @@ export default function PostDetailPage() {
 
   const isAuthor = currentUser && post.author && post.author.id === currentUser.id
 
+  const handleFollowAuthor = async () => {
+    if (!currentUser) {
+      showError('请先登录')
+      return
+    }
+    if (!post.author?.id || isAuthor) return
+
+    try {
+      if (isFollowingAuthor) {
+        await followApi.unfollowUser(post.author.id)
+        setIsFollowingAuthor(false)
+        showSuccess('已取消关注')
+      } else {
+        await followApi.followUser(post.author.id)
+        setIsFollowingAuthor(true)
+        showSuccess('已关注作者')
+      }
+    } catch {
+      showError('关注操作失败，请稍后再试')
+    }
+  }
+
+  const handleMessageAuthor = async () => {
+    if (!currentUser) {
+      showError('请先登录')
+      return
+    }
+    if (!post.author?.id || isAuthor) return
+
+    try {
+      const conversation = await messageApi.getOrCreateConversation({ participantId: post.author.id })
+      navigate(`/messages/${conversation.id}`)
+    } catch {
+      showError('打开私信失败，请重试')
+    }
+  }
+
   const handleLike = async () => {
     if (!currentUser) {
       showError('请先登录')
@@ -227,17 +280,36 @@ export default function PostDetailPage() {
       showError('请先登录')
       return
     }
+    if (localCollected && favoriteRecordId) {
+      try {
+        await favoriteApi.deleteFavorite(favoriteRecordId)
+        setLocalCollected(false)
+        setFavoriteRecordId(null)
+        setFavoriteCount((count) => Math.max(0, count - 1))
+        showSuccess('已取消收藏')
+      } catch {
+        showError('取消收藏失败，请重试')
+      }
+      return
+    }
+    if (localCollected) {
+      showSuccess('已收藏该帖子')
+      return
+    }
     try {
       const res = await favoriteApi.getFolders(1, 100)
-      if (!res.data || res.data.length === 0) {
+      const folderList = (res as any)?.data || []
+      if (!folderList || folderList.length === 0) {
         const created = await favoriteApi.createFolder({ name: '默认收藏夹' })
-        await favoriteApi.createFavorite({ postId: post.id, folderId: created.id })
+        const favorite = await favoriteApi.createFavorite({ postId: post.id, folderId: created.id })
         setLocalCollected(true)
+        setFavoriteRecordId(favorite.id)
+        setFavoriteCount((count) => count + 1)
         showSuccess('已加入默认收藏夹')
         return
       }
-      setFolders(res.data)
-      setSelectedFolderId(res.data[0]?.id || '')
+      setFolders(folderList)
+      setSelectedFolderId(folderList[0]?.id || '')
       setShowFavoriteDialog(true)
     } catch {
       showError('加载收藏夹失败，请重试')
@@ -250,10 +322,12 @@ export default function PostDetailPage() {
       return
     }
     try {
-      await favoriteApi.createFavorite({ postId: post.id, folderId: selectedFolderId, note: favoriteNote || undefined })
+      const favorite = await favoriteApi.createFavorite({ postId: post.id, folderId: selectedFolderId, note: favoriteNote || undefined })
       setShowFavoriteDialog(false)
       setFavoriteNote('')
       setLocalCollected(true)
+      setFavoriteRecordId(favorite.id)
+      setFavoriteCount((count) => count + 1)
       showSuccess('已加入收藏')
     } catch {
       showError('收藏失败，请重试')
@@ -359,9 +433,23 @@ export default function PostDetailPage() {
               </div>
             </div>
           )}
-          <button className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">
-            关注
-          </button>
+          {!isAuthor && post.author && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleFollowAuthor}
+                className={`rounded-lg border px-4 py-2 text-sm font-medium transition-colors ${isFollowingAuthor
+                    ? 'border-green-500 bg-green-50 text-green-700 hover:bg-green-100 dark:border-green-600 dark:bg-green-900/30 dark:text-green-200'
+                    : 'border-blue-500 bg-blue-600 text-white hover:bg-blue-700 dark:border-blue-400 dark:bg-blue-500'
+                  }`}>
+                {isFollowingAuthor ? '已关注' : '关注'}
+              </button>
+              <button
+                onClick={handleMessageAuthor}
+                className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
+                私信
+              </button>
+            </div>
+          )}
         </div>
 
         {/* 内容 */}
@@ -406,7 +494,7 @@ export default function PostDetailPage() {
                   ? 'border-yellow-500 bg-yellow-50 text-yellow-600 dark:border-yellow-400 dark:bg-yellow-900/20 dark:text-yellow-400'
                   : 'border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
                 }`}>
-              ⭐ {post.collectedCount ?? 0}
+              ⭐ {favoriteCount}
             </button>
           )}
           <button className="flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700">

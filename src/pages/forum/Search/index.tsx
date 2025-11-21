@@ -6,7 +6,7 @@ import { Post, User } from '@/types'
 
 export default function SearchPage() {
   const [searchParams, setSearchParams] = useSearchParams()
-  const initialQuery = searchParams.get('q') || ''
+  const initialQuery = searchParams.get('q') || searchParams.get('tag') || ''
   const [query, setQuery] = useState(initialQuery)
   const [searchType, setSearchType] = useState<'posts' | 'users'>('posts')
   const [sortBy, setSortBy] = useState<'latest' | 'hot' | 'popular'>('latest')
@@ -18,16 +18,21 @@ export default function SearchPage() {
 
   // 同步 URL 参数到本地状态
   useEffect(() => {
-    const urlQuery = searchParams.get('q') || ''
+    const urlQuery = searchParams.get('q') || searchParams.get('tag') || ''
     if (urlQuery !== query) {
       setQuery(urlQuery)
     }
-  }, [searchParams])
+  }, [searchParams, query])
 
   // 搜索帖子和用户
   useEffect(() => {
     const searchAll = async () => {
-      if (!query.trim()) {
+      const raw = query.trim()
+      const isTagSearch = raw.startsWith('#') || !!searchParams.get('tag')
+      const tagValue = searchParams.get('tag') || (raw.startsWith('#') ? raw.slice(1) : '')
+      const keyword = isTagSearch ? '' : raw
+
+      if (!keyword && !tagValue) {
         setPosts([])
         setUsers([])
         return
@@ -38,12 +43,16 @@ export default function SearchPage() {
       setLoadingUsers(true)
 
       try {
+        const postParams: any = { page: 1, limit: 20 }
+        if (tagValue) postParams.tag = tagValue
+        if (keyword) postParams.q = keyword
+
         const [postsRes, usersRes] = await Promise.all([
-          searchApi.searchPosts({ q: query, page: 1, limit: 20 }).catch((err) => {
+          searchApi.searchPosts(postParams).catch((err) => {
             console.error('搜索帖子失败:', err)
             return { data: [] }
           }),
-          searchApi.searchUsers({ q: query, page: 1, limit: 20 }).catch((err) => {
+          searchApi.searchUsers({ q: keyword || tagValue, page: 1, limit: 20 }).catch((err) => {
             console.error('搜索用户失败:', err)
             return { data: [] }
           }),
@@ -58,12 +67,17 @@ export default function SearchPage() {
     }
 
     searchAll()
-  }, [query])
+  }, [query, searchParams])
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
-    if (query.trim()) {
-      setSearchParams({ q: query.trim() })
+    const raw = query.trim()
+    if (raw.startsWith('#')) {
+      setSearchParams({ tag: raw.slice(1) })
+      return
+    }
+    if (raw) {
+      setSearchParams({ q: raw })
     }
   }
 
@@ -147,17 +161,31 @@ export default function SearchPage() {
                 {curUsers.length > 0 ? (
                   curUsers.map((user) => (
                     <Card key={user.id} className="p-6 transition-shadow hover:shadow-md">
-                      <Link to={`/users/${user.id}`} className="flex items-center gap-4">
+                      <Link to={`/users/${user.id}`} className="flex items-start gap-4">
                         <Avatar
                           src={user.avatar}
                           alt={user.username}
                           username={user.username}
-                          size={48}
+                          size={56}
                           seed={user.id}
                         />
-                        <div>
-                          <h3 className="font-semibold text-gray-900 dark:text-gray-100">{user.username}</h3>
-                          <p className="text-sm text-gray-500 dark:text-gray-400">{user.email}</p>
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+                              {user.nickname || user.username}
+                            </h3>
+                            <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-300">
+                              @{user.username}
+                            </span>
+                          </div>
+                          {user.bio && (
+                            <p className="mt-1 line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{user.bio}</p>
+                          )}
+                          <div className="mt-3 flex flex-wrap gap-3 text-sm text-gray-600 dark:text-gray-400">
+                            <span>帖子 {user.postCount ?? user._count?.posts ?? 0}</span>
+                            <span>关注 {user.followingCount ?? user.following ?? 0}</span>
+                            <span>粉丝 {user.followerCount ?? user.followersCount ?? user.followers ?? 0}</span>
+                          </div>
                         </div>
                       </Link>
                     </Card>

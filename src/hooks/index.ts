@@ -12,3 +12,4 @@ export * from './useUsers';
 export * from './useMarketplace';
 export * from './useMessages';
 export * from './useActivity';
+export * from './useWebSocket';

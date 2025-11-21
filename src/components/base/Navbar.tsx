@@ -7,30 +7,42 @@ import { notificationApi } from '@/api'
 function SearchBar() {
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (query.trim()) navigate(`/search?q=${encodeURIComponent(query.trim())}`)
+  const handleSubmit = (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
+    const keyword = query.trim()
+    if (!keyword) return
+    if (keyword.startsWith('#')) {
+      navigate(`/search?tag=${encodeURIComponent(keyword.slice(1))}`)
+      return
+    }
+    navigate(`/search?q=${encodeURIComponent(keyword)}`)
   }
   return (
-    <form onSubmit={handleSubmit} className="w-full max-w-md">
-      <div className="relative">
+    <form onSubmit={handleSubmit} className="w-full">
+      <div className="relative flex items-center">
         <input
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder="搜索帖子、用户、标签..."
-          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 pl-10 pr-4 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
+          className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 pr-12 text-gray-900 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100 dark:placeholder-gray-400"
         />
-        <svg
-          className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-gray-400 dark:text-gray-500"
-          fill="none"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2"
-          viewBox="0 0 24 24"
-          stroke="currentColor">
-          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
+        <button
+          type="submit"
+          className="absolute right-1 flex h-9 w-10 items-center justify-center rounded-md bg-blue-600 text-white shadow-sm transition hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-600"
+          aria-label="搜索"
+        >
+          <svg
+            className="h-5 w-5"
+            fill="none"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            viewBox="0 0 24 24"
+            stroke="currentColor">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
+        </button>
       </div>
     </form>
   )
@@ -78,25 +90,29 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-50 border-b border-gray-200 bg-white/80 backdrop-blur-sm dark:border-gray-800 dark:bg-gray-900/80">
       <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-        <div className="flex h-16 items-center justify-between">
-          {/* Logo */}
-          <Link to="/" className="flex items-center space-x-2">
-            <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">校园论坛</span>
-          </Link>
+        <div className="flex h-16 items-center justify-between gap-4">
+          <div className="flex items-center gap-6">
+            {/* Logo */}
+            <Link to="/" className="flex items-center space-x-2">
+              <span className="text-2xl font-bold text-blue-600 dark:text-blue-400">校园论坛</span>
+            </Link>
 
-          {/* 搜索栏 */}
-          <div className="hidden flex-1 max-w-md md:block md:mx-4">
-            <SearchBar />
+            {/* 桌面导航 */}
+            <div className="hidden md:flex md:items-center md:space-x-6">
+              <Link to="/" className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400">
+                首页
+              </Link>
+              <Link to="/marketplace" className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400">
+                交易平台
+              </Link>
+            </div>
           </div>
 
-          {/* 桌面导航 */}
-          <div className="hidden md:flex md:items-center md:space-x-6">
-            <Link to="/" className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400">
-              首页
-            </Link>
-            <Link to="/services" className="text-gray-700 hover:text-blue-600 dark:text-gray-300 dark:hover:text-blue-400">
-              服务中心
-            </Link>
+          {/* 桌面右侧操作栏 */}
+          <div className="hidden md:flex md:items-center md:gap-4">
+            <div className="w-72">
+              <SearchBar />
+            </div>
             {isAuthenticated && (
               <Link
                 to="/posts/new"
@@ -163,6 +179,11 @@ export default function Navbar() {
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
                     收藏夹
                   </Link>
+                  <Link
+                    to="/messages"
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
+                    私信
+                  </Link>
                   <div className="border-t border-gray-200 dark:border-gray-800"></div>
                   <button
                     onClick={handleLogout}
@@ -204,10 +225,10 @@ export default function Navbar() {
               首页
             </Link>
             <Link
-              to="/services"
+              to="/marketplace"
               className="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               onClick={() => setIsMenuOpen(false)}>
-              服务中心
+              交易平台
             </Link>
             {isAuthenticated && (
               <Link
@@ -240,6 +261,12 @@ export default function Navbar() {
               className="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               onClick={() => setIsMenuOpen(false)}>
               我的草稿
+            </Link>
+            <Link
+              to="/messages"
+              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
+              onClick={() => setIsMenuOpen(false)}>
+              私信
             </Link>
             {!isAuthenticated ? (
               <Link

@@ -61,7 +61,7 @@ export interface Conversation {
  * 发送私信请求
  */
 export interface SendMessageRequest {
-  receiverId: string;
+  conversationId: string;
   content: string;
 }
 

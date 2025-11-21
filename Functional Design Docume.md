@@ -1,146 +1,57 @@
-一、整体：一个后端，两套前端
-论坛网站端（普通用户端）
-面向所有注册用户
-主要是：发帖、浏览帖子、帖子下交流、服务中心、私信/通知
-后台管理端（Admin）
-只有一个管理员账号
-主要是：用户管理、帖子管理、评论管理、公告管理
-下面分两端列功能。
+一、整体：一个后端，两套前端（普通用户端 + Admin）。下面每个功能块附上已实现的真实 API、请求要求和主要返回字段，便于前端直接对接。
 
-二、论坛网站端（普通用户）功能方案
+二、论坛网站端（普通用户）功能 & API
+
 1. 账号与个人中心
-账号
-注册（邮箱/用户名 + 密码）
-登录 / 退出登录
-忘记密码 / 重置密码（
-个人资料
-查看个人资料（昵称、头像、简介等）
-编辑个人资料
-我的内容
-我的帖子列表
-收藏夹（比如我收藏了哪些帖子）
-关注和粉丝（我关注了哪些用户，哪些用户关注了我）
-动态（比如我关注的用户发布了新帖子，我收到了新评论等）
 
-2. 网站显示需要的功能
- 2.1显示所有帖子的信息包含置顶帖子，有分类功能，帖子显示对应的标签/关键词
- 2.2支持分页
- 2.3按关键词/标签搜索、按热门排序、按时间排序
- 2.4帖子详情
- 2.5帖子内容 + 图片
- 2.6楼层式评论区
- 2.7显示浏览数、评论数等基础信息
- 2.8发布帖子/ 管理自己的帖子，编辑自己的帖子，删除自己的帖子（真删除）
- 2.9帖子博主和评论区互动（点赞、收藏、关注）
- 2.10评论区互动（点赞、回复、删除）
-2.11评论与交流功能（围绕帖子）
-2.12在帖子下发表评论
-2.13回复某条评论（楼中楼）
-2.14删除自己的评论
-2.15用户可以删除自己发的评论
-2.16删除评论全都是物理删除
+- 注册/登录/令牌：`POST /auth/register`（email, username, password, nickname?） / `POST /auth/login`（email, password） / `POST /auth/refresh`（refreshToken） / `POST /auth/logout`；返回 `accessToken`、`refreshToken`、`user { id, username, email, nickname, avatar, role }`
+- 找回密码：`POST /auth/forgot-password`（email），`POST /auth/reset-password`（email, code, newPassword）
+- 获取/更新自己：`GET /users/me`，`PATCH /users/me`（nickname?, avatar?, bio?）；返回用户基础信息 + `_count { posts, comments, likes }`
+- 用户详情与内容：`GET /users/:id`；`GET /users/:id/posts?page&limit`；`GET /users/:id/likes?page&limit`；`GET /users/:id/activity?type=posts|comments|likes|favorites|following|followers` 返回 stats 或对应分页数据
+- 关注与粉丝：`POST /users/:id/follow` / `DELETE /users/:id/follow` / `GET /users/:id/following` / `GET /users/:id/followers` / `GET /users/:id/follow/status`（返回 `{ isFollowing }`）
+- 上传：`POST /upload/avatar`（file）/`/upload/image`/`/upload/images`/`/upload/document`，返回 `url` 或 `urls`
 
-3.用户实时通信 / 消息功能
-3.1私信（用户对用户）
-3.2打开与某个用户的私聊窗口
-3.3发送文本消息
-3.4查看历史聊天记录
-3.5会话列表
-3.6最近对话列表（按最近一条消息时间排序）
-3.7消息状态（可选）
-3.8未读数提示
-3.9已读标记（可选）
-4.系统通知
-4.1类型示例：
-4.1.1我的帖子被评论 / 回复
-4.1.2有人给我发了私信
-4.1.3新的系统公告
-4.2功能：
-4.2.1在网站上有通知角标
-4.2.2通知列表页，显示所有系统通知
-4.2.3系统公告
+2. 内容展示与互动（帖子/评论/点赞/收藏）
 
-5.二手交易
-5.1浏览二手商品列表
-5.2查看商品详情
-5.3发布二手商品信息
-5.4编辑 / 删除自己发布的商品
+- 帖子 CRUD：`POST /posts`（title, content, tags?, images?）返回 `{ id, title, content, tags, images, authorId, viewCount, likeCount, commentCount, isPinned, isHighlighted, createdAt, updatedAt, author{ id, username, nickname, avatar } }`；`GET /posts?page&limit&sortBy=createdAt|viewCount&order=desc|asc&tag=xxx`；`GET /posts/:id`；`PATCH /posts/:id`（仅作者）；`DELETE /posts/:id`（物理删除，作者）
+- 评论：`POST /comments`（postId, content, parentId?），返回评论字段；`GET /posts/:id/comments?page&limit&sortBy=createdAt|likeCount`；`GET /comments/:id/replies?page&limit`；`DELETE /comments/:id`（物理删除，作者）
+- 点赞：`POST /likes/toggle`（targetId, targetType: POST|COMMENT），返回 `{ isLiked, likeCount }`
+- 收藏夹/收藏：`POST /favorites/folders`（name, description?）；`POST /favorites`（postId, folderId?）；`GET /favorites/folders`；`GET /favorites/folders/:id`；`GET /favorites/folders/:folderId/posts?page&limit`；`PATCH /favorites/folders/:id`；`DELETE /favorites/folders/:id`；取消收藏 `DELETE /favorites/:id`
+- 草稿：`POST /posts/drafts`（title?, content?, tags?, images?）返回草稿；`GET /posts/drafts?page&limit`；`GET /posts/drafts/:id`；发布 `POST /posts/drafts/:id/publish`；`DELETE /posts/drafts/:id`
+- 搜索/推荐/动态：`GET /search/posts|users`；`GET /recommendations/*`（following/hot/trending/latest/topics等）；`GET /activities/following?page&limit`，`GET /activities/me?page&limit`
 
-6.社团招新（社团招新我觉得可以合并到帖子发布，在关键词/标签标注即可）
-6.1浏览招新信息列表
-6.2查看具体招新详情
-6.3发布招新信息
-6.4编辑 / 删除自己发布的招新
+3. 私信（用户对用户）
 
-7.失物招领（失物招领我觉得可以合并到帖子发布，在关键词/标签标注即可）
-7.1浏览失物 / 招领信息列表
-7.2查看详情
-7.3发布失物/招领信息
-7.4编辑 / 删除自己发布的信息
+- 创建或获取会话：`POST /conversations`（participantId UUID）返回 `{ id, type:"DIRECT", otherUser, lastMessage?, lastReadAt?, createdAt }`
+- 会话列表/详情：`GET /conversations?page&limit`；`GET /conversations/:id`（UUID 校验）
+- 消息列表：`GET /conversations/:id/messages?page&limit`，会自动标记未读并返回 `data[{ id, conversationId, senderId, content, isRead, readAt?, createdAt, sender{ id, username, nickname, avatar } }] + meta`
+- 发送消息：`POST /conversations/:id/messages`（content），返回消息对象；删除消息：`DELETE /conversations/messages/:messageId`
+- 未读计数：`GET /conversations/unread-count` 返回 `{ count }`
 
-8.拼车拼单（拼车拼单我觉得可以合并到帖子发布，在关键词/标签标注即可）
-8.1浏览拼车 / 拼单列表
-8.2查看详情
-8.3发布拼车/拼单信息
-8.4编辑 / 删除自己发布的信息
+4. 系统通知
 
-以上都是“用户自己发布的内容，自己能改/删（管理员可以删除）；其他人只能看 + 用评论/私信沟通”。
+- 拉取通知：`GET /notifications?page&limit&type=COMMENT|REPLY|LIKE|SYSTEM|NEW_POST|NEW_FOLLOWER&isRead=false` 返回 `data[{ id, type, senderId, content, relatedId, isRead, createdAt, sender{...} }] + meta`
+- 未读数：`GET /notifications/unread/count` 返回 `{ count }`
+- 标记已读：`PATCH /notifications/:id/read`；全部已读：`POST /notifications/read-all`；删除：`DELETE /notifications/:id`
 
-9.公告
-9.1在站点顶部或专门页面显示公告列表
-9.2查看单条公告详情
+5. 公告
 
-三、后台管理端（Admin）功能方案
-只有一个管理员账号，所有功能都围绕“全站内容管理与用户管理”。
+- 列表：`GET /announcements?page&limit` 返回 `id, title, content, type(INFO|WARNING|URGENT), targetRole(USER|ADMIN|null), isPinned, createdAt, author{ id, username, nickname, avatar }`
+- 详情：`GET /announcements/:id`
 
-1. 管理员账号
-1.1管理员登录
-1.2（仅初始化时）管理员注册：使用 ADMIN_REGISTRATION_KEY 生成唯一管理员
+6. 服务中心 / 市场与资源
 
-2. 用户管理（所有用户）
-2.1列表：
-2.1.1查看所有用户列表（支持按关键字搜索、用户其他信息搜索）
-2.1.2查看详情：
-2.1.2.1用户详细信息（相当于是用户的个人中心里面所有的信息）
-2.1.2.2编辑用户：
-2.1.2.2.1封禁/解封用户/删除用户（物理删除）
+- 统一说明：社团招新、失物招领、拼车拼单均用 `/posts`，在创建时带标签（如 `"社团招新"`、`"失物招领"`、`"拼车拼单"` 等），查询用 `GET /posts?tag=标签`
+- 专用查询入口：`GET /service-center/categories`；`GET /service-center/club-recruitment|lost-and-found|carpool|secondhand|study-resource?page&limit`（底层等价于带固定 tag 的 `/posts`）
+- 二手交易：`POST /secondhand`（title, description, price, images[], category, condition, location?, contact）返回商品对象 `{ id, title, description, price, images, category, condition, status, sellerId, viewCount, location, contact, createdAt, seller{...} }`；`GET /secondhand?page&limit&category&status`；`GET /secondhand/:id`；`PATCH /secondhand/:id`；`DELETE /secondhand/:id`
+- 学习资源：`POST /study-resources`（title, description, category, type DOCUMENT|VIDEO|LINK|CODE|OTHER, fileUrl?, link?, tags?）；`GET /study-resources?page&limit&category&type`；`POST /study-resources/:id/download`；`PATCH /study-resources/:id`；`DELETE /study-resources/:id`
+- 标签化查询示例：`GET /posts?tag=社团招新`，`GET /posts?tag=失物招领&tag=寻物`，`GET /posts?tag=拼车拼单&tag=拼车`
 
-3. 帖子管理（所有帖子）
-3.1帖子列表：
-3.1.1查看全站所有帖子（支持按作者、时间、热度、关键词、标签筛选）
-3.1.2帖子详情：
-3.1.2.1查看帖子完整内容（相当于是帖子详情页）
-3.1.2.2编辑帖子：
-3.1.2.2.1管理员可以删除任何帖子（物理删除）、隐藏帖子、置顶帖子
-3.1.2.2.2帖子置顶 / 取消置顶
-3.1.2.2.3帖子隐藏 / 取消隐藏
+7. 互动/动态补充
 
-4. 评论管理（评论管理合并到帖子管理这里，因为评论是依附于帖子的）
-4.1评论列表：
-4.1.1查看全站所有评论（支持按帖子、作者筛选）
-4.1.2评论详情：
-4.1.2.1查看评论完整内容 + 所属帖子信息
-4.1.2.2编辑评论（可选）：
-4.1.2.2.2删除评论（强制删除）：
-4.1.2.2.2.1管理员可以删除任何评论
-功能含义：这条评论从数据库中被清除，不再出现在前台任何地方
-4.1.2.2.3批量删除（可选）：
-4.1.2.2.3.1在列表勾选多条，一次性删除多条评论
+- 点赞、收藏、关注、通知均带实时计数返回；WebSocket 通知在连接时需传 `auth.token = accessToken`，事件见 `docs/API_DOCS_USER.md`。
 
-5. 公告管理
-5.1公告列表（后台视图）：
-5.1.1查看全部公告（含草稿/历史公告，如果你需要状态区分）
-5.1.2创建公告：
-5.1.2.1输入标题、内容等信息，发布公告
-5.1.2.2编辑公告：
-5.1.2.2.1修改已有公告的内容
-5.1.2.2.2删除公告：
-5.1.2.2.2.1从系统中删除某条公告
-5.1.2.2.2.2功能含义：这条公告从数据库中被清除，不再出现在前台任何地方
-5.1.2.2.2.3批量删除
-5.1.2.2.2.3.1在列表勾选多条，一次性删除多条公告（）
-5.1.2.2.2.3.2功能含义：这些公告从数据库中被清除，不再出现在前台任何地方
-5.1.2.3公告设置：
-5.1.2.3.1设置是否隐藏
-5.1.2.3.2设置是否置顶
---公告是一个单独的表
+三、后台管理端（Admin）
+
+- 初始化管理员：`POST /auth/register-admin`（需要 ADMIN_REGISTRATION_KEY）
+- 管理能力沿用同一批 REST：用户、帖子、评论、公告接口均返回完整字段，可基于角色在前端展示封禁/隐藏/置顶等操作（帖子/评论删除为物理删除）。

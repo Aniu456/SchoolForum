@@ -15,6 +15,7 @@ export default defineConfig({
     ],
   },
   server: {
-    port: 3001, // 使用后端 CORS 配置中允许的端口
+    port: 5174,
+    strictPort: true, // 端口被占用时报错而不是自动切换
   },
 });

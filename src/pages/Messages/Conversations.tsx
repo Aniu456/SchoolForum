@@ -2,13 +2,19 @@
  * 会话列表页面
  * 显示所有私信会话，按最近消息时间排序
  */
-import { Link } from 'react-router-dom';
-import { useConversations } from '@/hooks/useMessages';
+import { Link, useNavigate } from 'react-router-dom';
+import { useConversations, useCreateConversation, useDeleteConversation } from '@/hooks/useMessages';
 import { formatDistanceToNow } from 'date-fns';
 import { zhCN } from 'date-fns/locale';
+import { useState } from 'react';
 
 export default function ConversationsPage() {
   const { data, isLoading, error } = useConversations({ page: 1, limit: 50 });
+  const createConversationMutation = useCreateConversation();
+  const navigate = useNavigate();
+  const [targetUserId, setTargetUserId] = useState('');
+  const [createError, setCreateError] = useState('');
+  const deleteConversationMutation = useDeleteConversation();
 
   if (isLoading) {
     return (
@@ -37,11 +43,9 @@ export default function ConversationsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       {/* 头部 */}
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-            私信
-          </h1>
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">私信</h1>
           {totalUnread > 0 && (
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
               {totalUnread} 条未读消息
@@ -69,16 +73,13 @@ export default function ConversationsPage() {
             const hasUnread = conversation.unreadCount > 0;
 
             return (
-              <Link
+              <div
                 key={conversation.id}
-                to={`/messages/${conversation.id}`}
-                className={`block rounded-lg border p-4 transition-all hover:shadow-md ${
-                  hasUnread
-                    ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
-                    : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
-                }`}>
-                <div className="flex items-start gap-4">
-                  {/* 头像 */}
+                className={`flex items-center gap-3 rounded-lg border p-4 transition-all hover:shadow-md ${hasUnread
+                  ? 'border-blue-300 bg-blue-50 dark:border-blue-700 dark:bg-blue-900/20'
+                  : 'border-gray-200 bg-white dark:border-gray-700 dark:bg-gray-800'
+                  }`}>
+                <Link to={`/messages/${conversation.id}`} className="flex flex-1 items-start gap-4">
                   <div className="flex-shrink-0">
                     {otherUser?.avatar ? (
                       <img
@@ -91,7 +92,6 @@ export default function ConversationsPage() {
                         {otherUser?.nickname?.[0] || '?'}
                       </div>
                     )}
-                    {/* 在线状态 */}
                     {otherUser?.isActive && (
                       <div className="relative -mt-3 ml-9">
                         <div className="h-3 w-3 rounded-full border-2 border-white bg-green-500 dark:border-gray-800"></div>
@@ -99,15 +99,13 @@ export default function ConversationsPage() {
                     )}
                   </div>
 
-                  {/* 内容 */}
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex items-center justify-between">
                       <h3
-                        className={`truncate text-lg ${
-                          hasUnread
-                            ? 'font-bold text-gray-900 dark:text-gray-100'
-                            : 'font-semibold text-gray-800 dark:text-gray-200'
-                        }`}>
+                        className={`truncate text-lg ${hasUnread
+                          ? 'font-bold text-gray-900 dark:text-gray-100'
+                          : 'font-semibold text-gray-800 dark:text-gray-200'
+                          }`}>
                         {otherUser?.nickname || '未知用户'}
                       </h3>
                       {lastMessage && (
@@ -122,16 +120,14 @@ export default function ConversationsPage() {
 
                     {lastMessage && (
                       <p
-                        className={`truncate text-sm ${
-                          hasUnread
-                            ? 'font-medium text-gray-700 dark:text-gray-300'
-                            : 'text-gray-600 dark:text-gray-400'
-                        }`}>
+                        className={`truncate text-sm ${hasUnread
+                          ? 'font-medium text-gray-700 dark:text-gray-300'
+                          : 'text-gray-600 dark:text-gray-400'
+                          }`}>
                         {lastMessage.content}
                       </p>
                     )}
 
-                    {/* 未读数徽章 */}
                     {hasUnread && (
                       <div className="mt-2">
                         <span className="inline-flex items-center rounded-full bg-blue-600 px-2 py-0.5 text-xs font-medium text-white">
@@ -140,8 +136,21 @@ export default function ConversationsPage() {
                       </div>
                     )}
                   </div>
-                </div>
-              </Link>
+                </Link>
+                <button
+                  onClick={async () => {
+                    if (deleteConversationMutation.isPending) return;
+                    try {
+                      await deleteConversationMutation.mutateAsync(conversation.id);
+                    } catch (err) {
+                      alert((err as any)?.message || '删除失败');
+                    }
+                  }}
+                  className="h-8 w-8 flex-shrink-0 rounded-full border border-gray-300 text-gray-500 transition hover:bg-red-50 hover:text-red-600 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-red-900/30 dark:hover:text-red-300"
+                  title="删除会话">
+                  ✕
+                </button>
+              </div>
             );
           })}
         </div>

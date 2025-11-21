@@ -11,8 +11,7 @@ const NotFoundPage = lazy(() => import('@/pages/system/NotFound'))
 const PostDetailPage = lazy(() => import('@/pages/forum/Post/Detail'))
 const PostFormPage = lazy(() => import('@/pages/forum/Post/Form'))
 
-// Services views
-const ServicesPage = lazy(() => import('@/pages/Services'))
+// Marketplace views
 const MarketplacePage = lazy(() => import('@/pages/Services/Marketplace'))
 const MarketplaceDetailPage = lazy(() => import('@/pages/Services/Marketplace/Detail'))
 const MarketplaceFormPage = lazy(() => import('@/pages/Services/Marketplace/Form'))
@@ -33,6 +32,9 @@ const ChatPage = lazy(() => import('@/pages/Messages/Chat'))
 // Auth views
 const ForgotPasswordPage = lazy(() => import('@/pages/system/Auth/ForgotPassword'))
 const ResetPasswordPage = lazy(() => import('@/pages/system/Auth/ResetPassword'))
+
+// Announcement views
+const AnnouncementDetailPage = lazy(() => import('@/pages/system/Announcement/Detail'))
 
 /**
  * 路由配置
@@ -110,6 +112,12 @@ export const routes: RouteObject[] = [
     element: <NotificationsPage />,
   },
 
+  // 公告
+  {
+    path: '/announcements/:id',
+    element: <AnnouncementDetailPage />,
+  },
+
   // 私信
   {
     path: '/messages',
@@ -128,12 +136,6 @@ export const routes: RouteObject[] = [
 
   // 用户动态已移除（API.md 中使用 /notifications 接口代替活动流）
 
-  // 服务中心
-  {
-    path: '/services',
-    element: <ServicesPage />,
-  },
-
   // 二手交易
   {
     path: '/marketplace',
@@ -148,6 +150,7 @@ export const routes: RouteObject[] = [
     element: <MarketplaceDetailPage />,
   },
 
+  // 学习资源
   // 404
   {
     path: '*',

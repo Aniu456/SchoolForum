@@ -10,6 +10,7 @@ import { useMyActivities } from '@/hooks/useActivity'
 import { useToast } from '@/utils/toast-hook'
 import { favoriteApi, draftApi, type FavoriteFolder, type Favorite, type PostDraft } from '@/api'
 import type { Post, UserActivity } from '@/types'
+import { useUserFollowers, useUserFollowing } from '@/hooks/useUsers'
 
 type Tab = 'posts' | 'favorites' | 'drafts' | 'connections' | 'activity' | 'settings'
 
@@ -20,6 +21,8 @@ export default function ProfilePage() {
   const { user: currentUser } = useAuthStore()
   const { data: postsData, isLoading } = usePosts({})
   const posts = Array.isArray(postsData) ? postsData : postsData?.data || []
+  const { data: followingData, isLoading: followingLoading } = useUserFollowing(currentUser?.id || '', 1, 50)
+  const { data: followersData, isLoading: followersLoading } = useUserFollowers(currentUser?.id || '', 1, 50)
 
   // 用户动态
   const { data: activitiesData, isLoading: isActivitiesLoading } = useMyActivities({ page: 1, limit: 20 })
@@ -416,11 +419,34 @@ export default function ProfilePage() {
               <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 我的关注 ({currentUser.followingCount ?? 0})
               </h3>
-              <EmptyState
-                title="暂无关注"
-                description="快去关注感兴趣的用户吧！"
-                icon="👥"
-              />
+              {followingLoading ? (
+                <LoadingState message="加载关注列表..." />
+              ) : (followingData as any)?.data?.length > 0 ? (
+                <div className="space-y-3">
+                  {(followingData as any)?.data?.map((u: any) => (
+                    <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                          </div>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/users/${u.id}`)}>
+                        查看
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="暂无关注"
+                  description="快去关注感兴趣的用户吧！"
+                  icon="👥"
+                />
+              )}
             </Card>
 
             {/* 粉丝列表 */}
@@ -428,11 +454,34 @@ export default function ProfilePage() {
               <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
                 我的粉丝 ({currentUser.followerCount ?? 0})
               </h3>
-              <EmptyState
-                title="暂无粉丝"
-                description="发布优质内容吸引粉丝关注吧！"
-                icon="⭐"
-              />
+              {followersLoading ? (
+                <LoadingState message="加载粉丝列表..." />
+              ) : (followersData as any)?.data?.length > 0 ? (
+                <div className="space-y-3">
+                  {(followersData as any)?.data?.map((u: any) => (
+                    <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                      <div className="flex items-center gap-3">
+                        <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
+                        <div>
+                          <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400">
+                            关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                          </div>
+                        </div>
+                      </div>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/users/${u.id}`)}>
+                        查看
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <EmptyState
+                  title="暂无粉丝"
+                  description="发布优质内容吸引粉丝关注吧！"
+                  icon="⭐"
+                />
+              )}
             </Card>
           </div>
         </div>

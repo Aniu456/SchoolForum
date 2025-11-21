@@ -2,7 +2,7 @@
  * 私信相关 API
  * 根据功能设计文档 3.用户实时通信 / 消息功能
  */
-import apiClient from '../core/client';
+import apiClient, { api } from '../core/client';
 import type {
   Conversation,
   ConversationsResponse,
@@ -11,7 +11,6 @@ import type {
   SendMessageRequest,
   CreateConversationRequest,
   GetMessagesRequest,
-  MarkMessagesAsReadRequest,
 } from '@/types/message';
 
 const messageApi = {
@@ -27,8 +26,7 @@ const messageApi = {
     page?: number;
     limit?: number;
   }): Promise<ConversationsResponse> => {
-    const response = await apiClient.get('/messages/conversations', { params });
-    return response.data;
+    return await api.get('/conversations', { params });
   },
 
   /**
@@ -38,16 +36,14 @@ const messageApi = {
   getOrCreateConversation: async (
     data: CreateConversationRequest
   ): Promise<Conversation> => {
-    const response = await apiClient.post('/messages/conversations', data);
-    return response.data;
+    return await api.post('/conversations', data);
   },
 
   /**
    * 获取会话详情
    */
   getConversation: async (conversationId: string): Promise<Conversation> => {
-    const response = await apiClient.get(`/messages/conversations/${conversationId}`);
-    return response.data;
+    return await api.get(`/conversations/${conversationId}`);
   },
 
   // ============================================
@@ -60,31 +56,18 @@ const messageApi = {
    */
   getMessages: async (params: GetMessagesRequest): Promise<MessagesResponse> => {
     const { conversationId, ...queryParams } = params;
-    const response = await apiClient.get(
-      `/messages/conversations/${conversationId}/messages`,
+    return await api.get(
+      `/conversations/${conversationId}/messages`,
       { params: queryParams }
     );
-    return response.data;
   },
 
   /**
    * 发送消息
    */
   sendMessage: async (data: SendMessageRequest): Promise<Message> => {
-    const response = await apiClient.post('/messages', data);
-    return response.data;
-  },
-
-  /**
-   * 标记消息为已读
-   * 如果不传 messageIds，则标记该会话中所有未读消息为已读
-   */
-  markAsRead: async (data: MarkMessagesAsReadRequest): Promise<void> => {
-    const { conversationId, messageIds } = data;
-    await apiClient.patch(
-      `/messages/conversations/${conversationId}/read`,
-      { messageIds }
-    );
+    const { conversationId, content } = data;
+    return await api.post(`/conversations/${conversationId}/messages`, { content });
   },
 
   /**
@@ -92,7 +75,7 @@ const messageApi = {
    * 物理删除
    */
   deleteMessage: async (messageId: string): Promise<void> => {
-    await apiClient.delete(`/messages/${messageId}`);
+    await api.delete(`/conversations/messages/${messageId}`);
   },
 
   // ============================================
@@ -103,8 +86,16 @@ const messageApi = {
    * 获取未读消息总数
    */
   getUnreadCount: async (): Promise<number> => {
-    const response = await apiClient.get('/messages/unread-count');
-    return response.data.count;
+    const data = await api.get<{ count: number }>('/conversations/unread-count');
+    return data.count;
+  },
+
+  /**
+   * 删除会话
+   * DELETE /conversations/:id
+   */
+  deleteConversation: async (conversationId: string): Promise<void> => {
+    await apiClient.delete(`/conversations/${conversationId}`);
   },
 };
 

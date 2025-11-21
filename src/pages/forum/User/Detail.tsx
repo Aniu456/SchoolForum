@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { Avatar, PostCard, EmptyState, LoadingState, Card, Button } from '@/components'
 import { formatTime } from '@/utils/format'
-import { followApi } from '@/api'
+import { followApi, messageApi } from '@/api'
 import { useToast } from '@/utils/toast-hook'
 import { useUser } from '@/hooks/useUsers'
 import { useAuthStore } from '@/store/useAuthStore'
@@ -106,6 +106,19 @@ export default function UserDetailPage() {
     }
   }
 
+  const handleMessage = async () => {
+    if (!currentUser || !id) {
+      showError('请先登录')
+      return
+    }
+    try {
+      const conversation = await messageApi.getOrCreateConversation({ participantId: id })
+      navigate(`/messages/${conversation.id}`)
+    } catch {
+      showError('打开私信失败，请稍后再试')
+    }
+  }
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
       {/* 用户信息卡片 */}
@@ -128,20 +141,19 @@ export default function UserDetailPage() {
             <div className="mb-4 flex items-center justify-center gap-4 md:justify-start">
               <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{user.username}</h1>
               {!isCurrentUser && (
-                <Button onClick={handleFollow} variant={following ? 'outline' : 'primary'}>
-                  {following ? '已关注' : '关注'}
-                </Button>
+                <div className="flex items-center gap-2">
+                  <Button onClick={handleFollow} variant={following ? 'outline' : 'primary'}>
+                    {following ? '已关注' : '关注'}
+                  </Button>
+                  <Button onClick={handleMessage} variant="ghost">
+                    私信
+                  </Button>
+                </div>
               )}
             </div>
             {user.email && <p className="mb-4 text-gray-600 dark:text-gray-400">{user.email}</p>}
             {user.bio && <p className="mb-4 text-gray-700 dark:text-gray-300">{user.bio}</p>}
             <div className="flex flex-wrap justify-center gap-4 md:justify-start">
-              <div className="rounded-lg bg-blue-100 px-4 py-2 dark:bg-blue-900">
-                <div className="text-sm text-gray-600 dark:text-gray-400">角色</div>
-                <div className="font-semibold text-blue-700 dark:text-blue-300">
-                  {user.role === 'student' ? '学生' : user.role === 'teacher' ? '教师' : '管理员'}
-                </div>
-              </div>
               <div className="rounded-lg bg-green-100 px-4 py-2 dark:bg-green-900">
                 <div className="text-sm text-gray-600 dark:text-gray-400">注册时间</div>
                 <div className="font-semibold text-green-700 dark:text-green-300">{formatTime(user.createdAt)}</div>

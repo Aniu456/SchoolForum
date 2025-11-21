@@ -1,7 +1,6 @@
 import { useInfiniteQuery } from '@tanstack/react-query';
-import { postApi } from '@/api';
-import type { PostQueryParams } from '@/types';
-import type { SortType } from '@/types';
+import { postApi, recommendationApi } from '@/api';
+import type { PostQueryParams, SortType } from '@/types';
 
 interface UseInfinitePostsParams extends Omit<PostQueryParams, 'page' | 'sortBy'> {
   limit?: number;
@@ -12,7 +11,6 @@ interface UseInfinitePostsParams extends Omit<PostQueryParams, 'page' | 'sortBy'
 const mapSortByToBackend = (sortBy?: SortType): 'createdAt' | 'viewCount' => {
   switch (sortBy) {
     case 'popular':
-    case 'trending':
     case 'most_commented':
       return 'viewCount';
     case 'latest':
@@ -27,14 +25,31 @@ export const useInfinitePosts = (params?: UseInfinitePostsParams) => {
 
   return useInfiniteQuery({
     // 使用具体的值而不是对象引用，确保 queryKey 稳定
-    queryKey: ['posts', 'infinite', params?.sortBy, params?.tag, params?.authorId, params?.keyword, limit],
-    queryFn: ({ pageParam = 1 }) =>
-      postApi.getPosts({
+    queryKey: ['posts', 'infinite', params?.sortBy, params?.tag, params?.authorId, params?.keyword, params?.q, limit],
+    queryFn: ({ pageParam = 1 }) => {
+      const page = Number(pageParam) || 1;
+      // 按 API 文档使用推荐接口的趋势/热门/最新定义
+      if (params?.sortBy === 'trending') {
+        return recommendationApi.getTrendingPosts(page, limit);
+      }
+
+      if (params?.sortBy === 'popular') {
+        return recommendationApi.getHotPosts(page, limit);
+      }
+
+      // 无过滤条件时优先直接调用推荐接口的最新列表
+      const hasFilters = params?.tag || params?.authorId || params?.keyword || params?.q;
+      if (!hasFilters && (!params?.sortBy || params?.sortBy === 'latest')) {
+        return recommendationApi.getLatestPosts(page, limit);
+      }
+
+      return postApi.getPosts({
         ...params,
-        page: pageParam,
+        page,
         limit: limit,
         sortBy: backendSortBy,
-      }),
+      });
+    },
     getNextPageParam: (lastPage, allPages) => {
       if (!lastPage) {
         return undefined;
@@ -77,4 +92,3 @@ export const useInfinitePosts = (params?: UseInfinitePostsParams) => {
     refetchOnWindowFocus: false, // 窗口聚焦时不自动重新获取
   });
 };
-
