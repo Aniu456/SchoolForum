@@ -5,7 +5,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { marketplaceApi, studyResourceApi } from '@/api';
-import type { ItemCategory, ItemCondition, MarketplaceQueryParams, StudyResource } from '@/types';
+import type { ItemCategory, ItemCondition, MarketplaceQueryParams } from '@/types';
 
 const MAIN_TABS: { key: 'secondhand' | 'study'; label: string; category?: ItemCategory }[] = [
   { key: 'secondhand', label: '二手交易' },
@@ -30,7 +30,7 @@ export default function MarketplacePage() {
   });
 
   const { data: secondhandData, isLoading: secondhandLoading } = useQuery({
-    queryKey: ['marketplace', params],
+    queryKey: ['marketplace', 'items', params],
     queryFn: () => marketplaceApi.getMarketplaceItems(params),
     enabled: mainTab.key === 'secondhand',
   });
@@ -41,8 +41,17 @@ export default function MarketplacePage() {
     enabled: mainTab.key === 'study',
   });
 
-  const items = secondhandData?.data || [];
-  const studyList: StudyResource[] = (studyData as any)?.data || [];
+  // 防御性处理：确保 items 总是数组
+  const items = secondhandData
+    ? Array.isArray(secondhandData.data)
+      ? secondhandData.data
+      : Array.isArray(secondhandData)
+        ? secondhandData
+        : []
+    : [];
+  const studyList: any[] = Array.isArray((studyData as any)?.data)
+    ? (studyData as any).data
+    : [];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -71,11 +80,10 @@ export default function MarketplacePage() {
                   page: 1,
                 }));
               }}
-              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
-                mainTab.key === tab.key
-                  ? 'bg-blue-600 text-white shadow'
-                  : 'bg-white text-gray-700 hover:bg-blue-50 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
-              }`}>
+              className={`rounded-full px-4 py-2 text-sm font-semibold transition ${mainTab.key === tab.key
+                ? 'bg-blue-600 text-white shadow'
+                : 'bg-white text-gray-700 hover:bg-blue-50 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800'
+                }`}>
               {tab.label}
             </button>
           ))}
@@ -98,11 +106,10 @@ export default function MarketplacePage() {
                       page: 1,
                     }))
                   }
-                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                    params.condition === cond.value
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
-                  }`}>
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition ${params.condition === cond.value
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
+                    }`}>
                   {cond.label}
                 </button>
               ))}
@@ -119,11 +126,10 @@ export default function MarketplacePage() {
                     page: 1,
                   }))
                 }
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  params.sortBy === 'createdAt'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
-                }`}>
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${params.sortBy === 'createdAt'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
+                  }`}>
                 最新
               </button>
               <button
@@ -135,11 +141,10 @@ export default function MarketplacePage() {
                     page: 1,
                   }))
                 }
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  params.sortBy === 'viewCount'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
-                }`}>
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${params.sortBy === 'viewCount'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
+                  }`}>
                 热度{params.sortBy === 'viewCount' ? (params.order === 'desc' ? ' ↓' : ' ↑') : ''}
               </button>
               <button
@@ -151,11 +156,10 @@ export default function MarketplacePage() {
                     page: 1,
                   }))
                 }
-                className={`rounded-full px-3 py-1 text-xs font-medium transition ${
-                  params.sortBy === 'price'
-                    ? 'bg-blue-600 text-white'
-                    : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
-                }`}>
+                className={`rounded-full px-3 py-1 text-xs font-medium transition ${params.sortBy === 'price'
+                  ? 'bg-blue-600 text-white'
+                  : 'bg-gray-100 text-gray-700 hover:bg-blue-50 hover:text-blue-600 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-blue-900/40 dark:hover:text-blue-200'
+                  }`}>
                 价格{params.sortBy === 'price' ? (params.order === 'desc' ? ' ↓' : ' ↑') : ''}
               </button>
             </div>
@@ -196,7 +200,7 @@ export default function MarketplacePage() {
                 </div>
                 <div className="flex items-center justify-between text-sm text-gray-500">
                   <span>{CONDITIONS.find((c) => c.value === item.condition)?.label}</span>
-                  <span>👁️ {item.viewCount}</span>
+                  <span> {item.viewCount}</span>
                 </div>
               </Link>
             ))}
@@ -209,7 +213,11 @@ export default function MarketplacePage() {
       ) : (
         <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
           {studyList.map((res) => (
-            <div key={res.id} className="rounded-lg border bg-white p-4 shadow transition hover:shadow-md dark:bg-gray-900">
+            <Link
+              key={res.id}
+              to={`/study-resources/${res.id}`}
+              className="rounded-lg border bg-white p-4 shadow transition hover:-translate-y-1 hover:shadow-md dark:bg-gray-900"
+            >
               <div className="mb-2 inline-flex rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-200">
                 {res.type || '资源'}
               </div>
@@ -217,9 +225,9 @@ export default function MarketplacePage() {
               <p className="line-clamp-2 text-sm text-gray-600 dark:text-gray-400">{res.description}</p>
               <div className="mt-3 flex items-center justify-between text-sm text-gray-500">
                 <span>{res.category || '通用'}</span>
-                <span>{res.viewCount ? `👁️ ${res.viewCount}` : ''}</span>
+                <span>{res.viewCount ? ` ${res.viewCount}` : ''}</span>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

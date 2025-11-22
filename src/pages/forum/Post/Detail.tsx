@@ -492,6 +492,24 @@ export default function PostDetailPage() {
           )}
         </div>
 
+        {/* 封面/图片 */}
+        {post.images && post.images.length > 0 && (
+          <div className="mb-6 grid gap-3 sm:grid-cols-2">
+            <img
+              src={post.images[0]}
+              alt={post.title}
+              className="w-full rounded-2xl object-cover"
+            />
+            {post.images.length > 1 && (
+              <div className="grid grid-cols-2 gap-2">
+                {post.images.slice(1).map((img) => (
+                  <img key={img} src={img} alt={post.title} className="h-32 w-full rounded-lg object-cover" />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* 内容 */}
         <div className="mb-6 prose prose-gray dark:prose-invert max-w-none">
           <div
@@ -522,10 +540,10 @@ export default function PostDetailPage() {
               ? 'bg-blue-50 text-blue-600 ring-1 ring-blue-200 dark:bg-blue-900/20 dark:text-blue-300'
               : 'bg-gray-50 text-gray-700 hover:bg-gray-100 dark:bg-gray-800 dark:text-gray-200'
               }`}>
-            👍 赞 {localLikes}
+            赞 {localLikes}
           </button>
           <button className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-            💬 评论 {comments.length}
+            评论 {comments.length}
           </button>
           {currentUser && (
             <button
@@ -538,7 +556,7 @@ export default function PostDetailPage() {
             </button>
           )}
           <button className="flex items-center justify-center gap-2 rounded-xl bg-gray-50 px-4 py-3 text-sm font-medium text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-            👁️ 浏览 {post.viewCount}
+            浏览 {post.viewCount}
           </button>
           <div className="md:col-span-2">
             <ShareButton url={`/posts/${post.id}`} title={post.title} description={stripHtml(post.content)} />

@@ -169,21 +169,6 @@ export default function Navbar() {
                     className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
                     设置
                   </Link>
-                  <Link
-                    to="/drafts"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
-                    我的草稿
-                  </Link>
-                  <Link
-                    to="/favorites"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
-                    收藏夹
-                  </Link>
-                  <Link
-                    to="/messages"
-                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800">
-                    私信
-                  </Link>
                   <div className="border-t border-gray-200 dark:border-gray-800"></div>
                   <button
                     onClick={handleLogout}
@@ -255,18 +240,6 @@ export default function Navbar() {
               className="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
               onClick={() => setIsMenuOpen(false)}>
               设置
-            </Link>
-            <Link
-              to="/drafts"
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-              onClick={() => setIsMenuOpen(false)}>
-              我的草稿
-            </Link>
-            <Link
-              to="/messages"
-              className="block px-4 py-2 text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800"
-              onClick={() => setIsMenuOpen(false)}>
-              私信
             </Link>
             {!isAuthenticated ? (
               <Link

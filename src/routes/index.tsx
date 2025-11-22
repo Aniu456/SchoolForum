@@ -16,6 +16,10 @@ const MarketplacePage = lazy(() => import('@/pages/Services/Marketplace'))
 const MarketplaceDetailPage = lazy(() => import('@/pages/Services/Marketplace/Detail'))
 const MarketplaceFormPage = lazy(() => import('@/pages/Services/Marketplace/Form'))
 
+// Study Resource views
+const StudyResourcesPage = lazy(() => import('@/pages/Services/StudyResources'))
+const StudyResourceDetailPage = lazy(() => import('@/pages/Services/StudyResources/Detail'))
+
 // Category views removed: API.md 不提供分类接口，已移除所有分类相关功能
 
 // User views
@@ -134,6 +138,12 @@ export const routes: RouteObject[] = [
     element: <ProfilePage />,
   },
 
+  // 积分与等级（已集成到 Profile 页面）
+  {
+    path: '/points',
+    element: <ProfilePage />,
+  },
+
   // 用户动态已移除（API.md 中使用 /notifications 接口代替活动流）
 
   // 二手交易
@@ -151,6 +161,20 @@ export const routes: RouteObject[] = [
   },
 
   // 学习资源
+  {
+    path: '/study-resources',
+    children: [
+      {
+        index: true,
+        element: <StudyResourcesPage />,
+      },
+      {
+        path: ':id',
+        element: <StudyResourceDetailPage />,
+      },
+    ],
+  },
+
   // 404
   {
     path: '*',

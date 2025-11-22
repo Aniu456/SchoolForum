@@ -88,6 +88,7 @@ export function useDeleteMarketplaceItem() {
     mutationFn: marketplaceApi.deleteMarketplaceItem,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['marketplace', 'items'] });
+      queryClient.invalidateQueries({ queryKey: ['marketplace', 'items', 'infinite'] });
       queryClient.invalidateQueries({ queryKey: ['marketplace', 'my'] });
     },
   });
@@ -150,4 +151,3 @@ export function useToggleMarketplaceFavorite() {
     },
   });
 }
-

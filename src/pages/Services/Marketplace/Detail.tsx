@@ -1,8 +1,12 @@
 'use client'
 
-import { Link, useParams } from 'react-router-dom'
-import { Avatar, LoadingState, EmptyState, Button } from '@/components'
-import { useMarketplaceItem } from '@/hooks/useMarketplace'
+import { useState } from 'react'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Avatar, LoadingState, EmptyState, Button, ConfirmDialog } from '@/components'
+import { useMarketplaceItem, useDeleteMarketplaceItem } from '@/hooks/useMarketplace'
+import { useAuthStore } from '@/store/useAuthStore'
+import { messageApi } from '@/api'
+import { useToast } from '@/utils/toast-hook'
 import { formatNumber, formatTime } from '@/utils/format'
 
 const CONDITION_LABELS: Record<string, string> = {
@@ -21,6 +25,11 @@ const TRADE_METHOD_LABELS: Record<string, string> = {
 
 export default function MarketplaceDetailPage() {
     const { id } = useParams<{ id: string }>()
+    const navigate = useNavigate()
+    const { user } = useAuthStore()
+    const { showSuccess, showError } = useToast()
+    const deleteMutation = useDeleteMarketplaceItem()
+    const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
     const { data: item, isLoading, error, refetch } = useMarketplaceItem(id || '')
 
     if (!id) {
@@ -50,7 +59,52 @@ export default function MarketplaceDetailPage() {
     }
 
     const conditionLabel = CONDITION_LABELS[item.condition] ?? item.condition
-    const tradeMethodLabel = TRADE_METHOD_LABELS[item.tradeMethod] ?? item.tradeMethod
+    const tradeMethodLabel = item.tradeMethod ? (TRADE_METHOD_LABELS[item.tradeMethod] ?? item.tradeMethod) : undefined
+    const isOwner = Boolean(user && (user.id === item.sellerId || user.id === item.seller?.id))
+
+    const handleCopyContact = async () => {
+        if (!item.contact) {
+            showError('卖家未提供联系方式')
+            return
+        }
+        try {
+            await navigator.clipboard.writeText(item.contact)
+            showSuccess('已复制卖家联系方式')
+        } catch {
+            showError('复制失败，请手动复制')
+        }
+    }
+
+    const handleMessage = async () => {
+        if (!item.seller?.id && !item.sellerId) {
+            showError('未找到卖家信息')
+            return
+        }
+        if (!user) {
+            showError('请先登录再联系卖家')
+            navigate('/login')
+            return
+        }
+        try {
+            const conversation = await messageApi.getOrCreateConversation({
+                participantId: item.seller?.id || item.sellerId,
+            })
+            navigate(`/messages/${conversation.id}`)
+        } catch {
+            showError('打开私信失败，请稍后重试')
+        }
+    }
+
+    const handleDelete = async () => {
+        if (!id) return
+        try {
+            await deleteMutation.mutateAsync(id)
+            showSuccess('商品已删除')
+            navigate('/marketplace')
+        } catch {
+            showError('删除失败，请稍后再试')
+        }
+    }
 
     return (
         <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
@@ -87,9 +141,11 @@ export default function MarketplaceDetailPage() {
                             <span className="rounded-full bg-blue-50 px-3 py-1 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                                 {conditionLabel}
                             </span>
-                            <span className="rounded-full bg-green-50 px-3 py-1 text-green-700 dark:bg-green-900/40 dark:text-green-300">
-                                {tradeMethodLabel}
-                            </span>
+                            {tradeMethodLabel && (
+                                <span className="rounded-full bg-green-50 px-3 py-1 text-green-700 dark:bg-green-900/40 dark:text-green-300">
+                                    {tradeMethodLabel}
+                                </span>
+                            )}
                             {item.location && (
                                 <span className="rounded-full bg-gray-100 px-3 py-1 text-gray-600 dark:bg-gray-800 dark:text-gray-300">
                                     {item.location}
@@ -100,7 +156,7 @@ export default function MarketplaceDetailPage() {
                         <p className="whitespace-pre-wrap text-gray-700 dark:text-gray-300">{item.description}</p>
 
                         <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                            <span>👁️ {formatNumber(item.viewCount)}</span>
+                            <span> {formatNumber(item.viewCount)}</span>
                             <span>发布时间 {formatTime(item.createdAt)}</span>
                         </div>
 
@@ -125,8 +181,29 @@ export default function MarketplaceDetailPage() {
                             </div>
                         )}
 
-                        <div className="mt-4 flex gap-3">
-                            <Button variant="primary">联系卖家</Button>
+                        {item.contact && (
+                            <div className="flex items-center justify-between rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900 dark:bg-blue-900/30 dark:text-blue-100">
+                                <div className="flex flex-col">
+                                    <span className="font-semibold">联系方式</span>
+                                    <span className="break-all text-blue-800 dark:text-blue-100">{item.contact}</span>
+                                </div>
+                                <Button size="sm" variant="secondary" onClick={handleCopyContact}>
+                                    复制
+                                </Button>
+                            </div>
+                        )}
+
+                        <div className="mt-4 flex flex-wrap gap-3">
+                            {!isOwner && (
+                                <>
+                                    <Button variant="primary" onClick={handleMessage}>私信卖家</Button>
+                                </>
+                            )}
+                            {isOwner && (
+                                <Button variant="danger" onClick={() => setShowDeleteConfirm(true)} isLoading={deleteMutation.isPending}>
+                                    删除商品
+                                </Button>
+                            )}
                             <Button variant="outline" onClick={() => window.history.back()}>
                                 返回
                             </Button>
@@ -134,6 +211,17 @@ export default function MarketplaceDetailPage() {
                     </div>
                 </div>
             </article>
+
+            <ConfirmDialog
+                isOpen={showDeleteConfirm}
+                title="删除商品"
+                description="删除后无法恢复，确定要删除该商品吗？"
+                confirmText="删除"
+                cancelText="取消"
+                type="danger"
+                onConfirm={handleDelete}
+                onClose={() => setShowDeleteConfirm(false)}
+            />
         </div>
     )
 }

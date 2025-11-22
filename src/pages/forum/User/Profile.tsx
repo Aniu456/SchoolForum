@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import { Avatar, PostCard, EmptyState, LoadingState, Button, Card } from '@/components'
 import { formatTime } from '@/utils/format'
@@ -8,20 +8,21 @@ import { useAuthStore } from '@/store/useAuthStore'
 import { usePosts } from '@/hooks/usePosts'
 import { useFollowingActivities } from '@/hooks/useActivity'
 import { useToast } from '@/utils/toast-hook'
-import { favoriteApi, draftApi, followApi, type FavoriteFolder, type Favorite } from '@/api'
+import { favoriteApi, draftApi, followApi, pointsApi, uploadApi, userApi, type FavoriteFolder, type Favorite } from '@/api'
 import type { Post } from '@/types'
 import type { Draft } from '@/api/content/draft'
 import { useUserFollowers, useUserFollowing } from '@/hooks/useUsers'
-import { useQueryClient } from '@tanstack/react-query'
+import { useQueryClient, useQuery } from '@tanstack/react-query'
 
-type Tab = 'posts' | 'favorites' | 'drafts' | 'connections' | 'activity' | 'settings'
+type Tab = 'posts' | 'favorites' | 'drafts' | 'connections' | 'activity' | 'points' | 'settings'
 
 export default function ProfilePage() {
   const location = useLocation()
   const navigate = useNavigate()
   const { showSuccess, showError } = useToast()
-  const { user: currentUser } = useAuthStore()
+  const { user: currentUser, updateUser } = useAuthStore()
   const queryClient = useQueryClient()
+  const avatarInputRef = useRef<HTMLInputElement | null>(null)
   const { data: postsData, isLoading } = usePosts({})
   const posts = Array.isArray(postsData) ? postsData : postsData?.data || []
 
@@ -76,6 +77,10 @@ export default function ProfilePage() {
   const [drafts, setDrafts] = useState<Draft[]>([])
   const [isDraftsLoading, setIsDraftsLoading] = useState(false)
 
+  // 积分相关状态
+  const [pointsTab, setPointsTab] = useState<'overview' | 'history' | 'leaderboard'>('overview')
+  const [historyPage, setHistoryPage] = useState(1)
+
   // 根据路由确定默认 tab
   const getDefaultTab = (): Tab => {
     if (location.pathname === '/settings') return 'settings'
@@ -83,17 +88,41 @@ export default function ProfilePage() {
     if (location.pathname === '/drafts') return 'drafts'
     if (location.pathname === '/connections') return 'connections'
     if (location.pathname === '/activity') return 'activity'
+    if (location.pathname === '/points') return 'points'
     return 'posts'
   }
 
   const [activeTab, setActiveTab] = useState<Tab>(getDefaultTab())
 
+  // 积分数据查询
+  const { data: myPoints } = useQuery({
+    queryKey: ['points', 'me'],
+    queryFn: () => pointsApi.getMyPoints(),
+    enabled: activeTab === 'points',
+  })
+
+  const { data: pointsHistory } = useQuery({
+    queryKey: ['points', 'history', historyPage],
+    queryFn: () => pointsApi.getHistory({ page: historyPage, limit: 20 }),
+    enabled: activeTab === 'points' && pointsTab === 'history',
+  })
+
+  const { data: leaderboard } = useQuery({
+    queryKey: ['points', 'leaderboard'],
+    queryFn: () => pointsApi.getLeaderboard(50),
+    enabled: activeTab === 'points' && pointsTab === 'leaderboard',
+  })
+
+  const points = myPoints
+
   // 设置表单状态
   const [username, setUsername] = useState(currentUser?.username || '')
+  const [nickname, setNickname] = useState(currentUser?.nickname || '')
   const [email, setEmail] = useState(currentUser?.email || '')
   const [bio, setBio] = useState(currentUser?.bio || '')
   const [avatar, setAvatar] = useState(currentUser?.avatar || '')
   const [isSaving, setIsSaving] = useState(false)
+  const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
 
   // 加载收藏夹列表
   const loadFavoriteFolders = async () => {
@@ -124,6 +153,7 @@ export default function ProfilePage() {
   useEffect(() => {
     if (currentUser) {
       setUsername(currentUser.username || '')
+      setNickname(currentUser.nickname || '')
       setEmail(currentUser.email || '')
       setBio(currentUser.bio || '')
       setAvatar(currentUser.avatar || '')
@@ -215,13 +245,36 @@ export default function ProfilePage() {
     setIsSaving(true)
 
     try {
-      // 模拟保存
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      showSuccess('设置已保存')
+      const payload = {
+        nickname: nickname?.trim() || undefined,
+        bio: bio?.trim() || undefined,
+        avatar: avatar || undefined,
+      }
+      const updated = await userApi.updateProfile(payload)
+      updateUser(updated)
+      await queryClient.invalidateQueries({ queryKey: ['user', currentUser.id] })
+      await queryClient.invalidateQueries({ queryKey: ['users'] })
+      showSuccess('资料已更新')
     } catch {
       showError('保存失败，请重试')
     } finally {
       setIsSaving(false)
+    }
+  }
+
+  const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+    setIsUploadingAvatar(true)
+    try {
+      const res = await uploadApi.uploadAvatar(file)
+      setAvatar(res.url)
+      showSuccess('头像已上传')
+    } catch {
+      showError('头像上传失败，请重试')
+    } finally {
+      setIsUploadingAvatar(false)
+      event.target.value = ''
     }
   }
 
@@ -329,6 +382,15 @@ export default function ProfilePage() {
             : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
             }`}>
           动态
+        </Button>
+        <Button
+          onClick={() => handleTabChange('points')}
+          variant="ghost"
+          className={`pb-4 text-lg font-medium ${activeTab === 'points'
+            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
+            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
+            }`}>
+          积分等级
         </Button>
         <Button
           onClick={() => handleTabChange('settings')}
@@ -876,6 +938,231 @@ export default function ProfilePage() {
         </div>
       )}
 
+      {/* 积分等级 */}
+      {activeTab === 'points' && (
+        <div className="space-y-6">
+          {/* 我的积分卡片 */}
+          <Card className="bg-gradient-to-br from-blue-500 to-purple-600 p-6 text-white">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="mb-2 text-3xl font-bold">我的积分</h2>
+                <div className="flex items-baseline gap-2">
+                  <span className="text-5xl font-bold">{points?.totalPoints || 0}</span>
+                  <span className="text-xl opacity-90">分</span>
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="mb-2 text-sm opacity-90">当前等级</div>
+                <div className="flex items-center gap-2">
+                  <span className="text-4xl font-bold">Lv.{points?.level || 0}</span>
+                </div>
+                <div className="mt-2 text-sm opacity-90">
+                  距离下一级还需 {(points?.nextLevelPoints || 0) - (points?.totalPoints || 0)} 分
+                </div>
+              </div>
+            </div>
+
+            {/* 进度条 */}
+            <div className="mt-6">
+              <div className="mb-2 flex justify-between text-sm opacity-90">
+                <span>等级进度</span>
+                <span>{points?.progress || 0}%</span>
+              </div>
+              <div className="h-3 overflow-hidden rounded-full bg-white/30">
+                <div
+                  className="h-full rounded-full bg-white transition-all duration-500"
+                  style={{ width: `${points?.progress || 0}%` }}
+                />
+              </div>
+            </div>
+          </Card>
+
+          {/* 子标签切换 */}
+          <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setPointsTab('overview')}
+              className={`px-4 py-2 font-medium transition-colors ${pointsTab === 'overview'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                }`}>
+              等级说明
+            </button>
+            <button
+              onClick={() => setPointsTab('history')}
+              className={`px-4 py-2 font-medium transition-colors ${pointsTab === 'history'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                }`}>
+              积分历史
+            </button>
+            <button
+              onClick={() => setPointsTab('leaderboard')}
+              className={`px-4 py-2 font-medium transition-colors ${pointsTab === 'leaderboard'
+                ? 'border-b-2 border-blue-600 text-blue-600'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                }`}>
+              排行榜
+            </button>
+          </div>
+
+          {/* 等级说明 */}
+          {pointsTab === 'overview' && (
+            <div className="space-y-4">
+              <Card className="p-6">
+                <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">等级体系</h3>
+                <div className="grid gap-3">
+                  {[0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500].map((threshold, index) => (
+                    <div
+                      key={index}
+                      className={`flex items-center justify-between rounded-lg border p-3 ${(points?.level || 0) === index
+                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                        : 'border-gray-200 dark:border-gray-700'
+                        }`}>
+                      <div className="flex items-center gap-3">
+                        <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">Lv.{index}</span>
+                        {(points?.level || 0) === index && (
+                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
+                            当前等级
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        {threshold} - {index < 10 ? [100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500][index] - 1 : '∞'} 分
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+
+              <Card className="p-6">
+                <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">获取积分方式</h3>
+                <div className="space-y-2 text-sm">
+                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">发布帖子</span>
+                    <span className="font-semibold text-green-600">+10 分</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">发表评论</span>
+                    <span className="font-semibold text-green-600">+5 分</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">收到点赞</span>
+                    <span className="font-semibold text-green-600">+2 分</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">每日登录</span>
+                    <span className="font-semibold text-green-600">+5 分</span>
+                  </div>
+                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
+                    <span className="text-gray-600 dark:text-gray-400">连续登录</span>
+                    <span className="font-semibold text-green-600">+10 分</span>
+                  </div>
+                  <div className="flex justify-between py-2">
+                    <span className="text-gray-600 dark:text-gray-400">删除内容</span>
+                    <span className="font-semibold text-red-600">相应扣分</span>
+                  </div>
+                </div>
+              </Card>
+            </div>
+          )}
+
+          {/* 积分历史 */}
+          {pointsTab === 'history' && (
+            <div className="space-y-3">
+              {pointsHistory?.data.map((item: any) => (
+                <Card key={item.id} className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex-1">
+                      <div className="mb-1 flex items-center gap-2">
+                        <span className="font-medium text-gray-900 dark:text-gray-100">
+                          {item.action.replace(/_/g, ' ')}
+                        </span>
+                        <span className={`text-lg font-bold ${item.points > 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {item.points > 0 ? '+' : ''}{item.points}
+                        </span>
+                      </div>
+                      {item.reason && <p className="text-sm text-gray-600 dark:text-gray-400">{item.reason}</p>}
+                      <p className="mt-1 text-xs text-gray-500">{formatTime(item.createdAt)}</p>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+
+              {/* 分页 */}
+              {pointsHistory?.meta && (
+                <div className="mt-6 flex justify-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={historyPage === 1}
+                    onClick={() => setHistoryPage(historyPage - 1)}>
+                    上一页
+                  </Button>
+                  <span className="flex items-center px-4 text-sm text-gray-600 dark:text-gray-400">
+                    第 {historyPage} / {pointsHistory.meta.totalPages} 页
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={historyPage >= pointsHistory.meta.totalPages}
+                    onClick={() => setHistoryPage(historyPage + 1)}>
+                    下一页
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* 排行榜 */}
+          {pointsTab === 'leaderboard' && (
+            <div className="space-y-3">
+              {leaderboard?.map((item: any, index: number) => (
+                <Card key={item.id} className="p-4">
+                  <div className="flex items-center gap-4">
+                    <div
+                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-bold ${index === 0
+                        ? 'bg-yellow-500 text-white'
+                        : index === 1
+                          ? 'bg-gray-400 text-white'
+                          : index === 2
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
+                        }`}>
+                      {index + 1}
+                    </div>
+
+                    <div className="flex items-center gap-3 flex-1">
+                      {item.user?.avatar ? (
+                        <img
+                          src={item.user.avatar}
+                          alt={item.user.nickname}
+                          className="h-12 w-12 rounded-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-lg font-semibold text-white">
+                          {(item.user?.nickname || item.user?.username)?.[0] || '?'}
+                        </div>
+                      )}
+                      <div className="flex-1">
+                        <div className="font-semibold text-gray-900 dark:text-gray-100">
+                          {item.user?.nickname || item.user?.username}
+                        </div>
+                        <div className="text-sm text-gray-600 dark:text-gray-400">Lv.{item.level}</div>
+                      </div>
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-2xl font-bold text-blue-600">{item.totalPoints}</div>
+                      <div className="text-xs text-gray-500">积分</div>
+                    </div>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* 设置 */}
       {activeTab === 'settings' && (
         <div className="space-y-6">
@@ -887,35 +1174,41 @@ export default function ProfilePage() {
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">头像</label>
                 <div className="flex items-center gap-4">
                   <Avatar src={avatar} alt="头像" username={username} size={80} seed={currentUser.id} />
-                  <Button variant="outline" size="sm" type="button">
+                  <div className="flex items-center gap-3">
+                    <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="text-sm" />
+                    {isUploadingAvatar && <span className="text-sm text-gray-500">上传中...</span>}
+                  </div>
+                  <Button variant="outline" size="sm" type="button" onClick={() => avatarInputRef.current?.click()}>
                     更换头像
                   </Button>
                 </div>
               </div>
 
               <div>
-                <label htmlFor="username" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  用户名
+                <label htmlFor="nickname" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  昵称
                 </label>
                 <input
                   type="text"
-                  id="username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
+                  id="nickname"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
                   className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  placeholder="请输入昵称"
                 />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">昵称将展示给其他用户，用户名仅用于登录不可修改</p>
               </div>
 
               <div>
                 <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                  邮箱
+                  邮箱（只读）
                 </label>
                 <input
                   type="email"
                   id="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                  disabled
+                  className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 text-gray-500 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100 dark:text-gray-400"
                 />
               </div>
 

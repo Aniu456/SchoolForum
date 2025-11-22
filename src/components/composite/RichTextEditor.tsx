@@ -1,5 +1,6 @@
 'use client';
 
+import { useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -10,6 +11,7 @@ interface RichTextEditorProps {
   onChange: (content: string) => void;
   placeholder?: string;
   className?: string;
+  onUploadImage?: (file: File) => Promise<string>;
 }
 
 export default function RichTextEditor({
@@ -17,7 +19,11 @@ export default function RichTextEditor({
   onChange,
   placeholder = '写下你的内容...',
   className = '',
+  onUploadImage,
 }: RichTextEditorProps) {
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
   const editor = useEditor({
     extensions: [
       StarterKit,
@@ -53,6 +59,31 @@ export default function RichTextEditor({
     const url = window.prompt('请输入图片URL:');
     if (url) {
       editor.chain().focus().setImage({ src: url }).run();
+    }
+  };
+
+  const handleUploadClick = () => {
+    if (!onUploadImage) {
+      addImage();
+      return;
+    }
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !onUploadImage) return;
+    try {
+      setIsUploading(true);
+      const url = await onUploadImage(file);
+      if (url) {
+        editor.chain().focus().setImage({ src: url }).run();
+      }
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
@@ -207,12 +238,19 @@ export default function RichTextEditor({
           🔗
         </button>
         <button
-          onClick={addImage}
+          onClick={handleUploadClick}
           className="rounded px-2 py-1 text-sm bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
           title="图片"
         >
-          🖼️
+          {isUploading ? '上传中...' : '🖼️'}
         </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={handleFileChange}
+        />
 
         <div className="h-6 w-px bg-gray-300 dark:bg-gray-600"></div>
 
@@ -240,4 +278,3 @@ export default function RichTextEditor({
     </div>
   );
 }
-

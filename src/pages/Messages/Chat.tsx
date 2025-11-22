@@ -160,9 +160,9 @@ export default function ChatPage() {
   }
 
   return (
-    <div className="container mx-auto flex h-screen max-h-[calc(100vh-4rem)] flex-col px-4 py-4">
+    <div className="mx-auto flex h-[calc(100vh-4rem)] max-w-7xl flex-col">
       {/* 头部 */}
-      <div className="mb-4 flex items-center gap-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800">
+      <div className="flex items-center gap-4 border-b border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-900">
         <button
           onClick={() => navigate('/messages')}
           className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100">
@@ -189,7 +189,7 @@ export default function ChatPage() {
                 className="h-10 w-10 rounded-full object-cover"
               />
             ) : (
-              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gray-300 text-lg font-semibold text-gray-700 dark:bg-gray-600 dark:text-gray-300">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-lg font-semibold text-white">
                 {otherUser.nickname[0]}
               </div>
             )}
@@ -209,7 +209,7 @@ export default function ChatPage() {
       </div>
 
       {/* 消息列表 */}
-      <div className="mb-4 flex-1 overflow-y-auto rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900">
+      <div className="flex-1 overflow-y-auto bg-gray-50 p-6 dark:bg-gray-950">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center text-gray-500 dark:text-gray-400">
             暂无消息，开始聊天吧
@@ -223,31 +223,31 @@ export default function ChatPage() {
                   key={message.id}
                   className={`flex ${isMyMessage ? 'justify-end' : 'justify-start'}`}>
                   <div
-                    className={`max-w-[70%] rounded-lg px-4 py-2 ${isMyMessage
+                    className={`max-w-[70%] rounded-2xl px-4 py-3 shadow-sm ${isMyMessage
                       ? 'bg-blue-600 text-white'
                       : 'bg-white text-gray-900 dark:bg-gray-800 dark:text-gray-100'
                       }`}>
                     <p className="break-words">{message.content}</p>
-                    <p
-                      className={`mt-1 text-xs ${isMyMessage
-                        ? 'text-blue-200'
-                        : 'text-gray-500 dark:text-gray-400'
-                        }`}>
-                      {formatDistanceToNow(new Date(message.createdAt), {
-                        addSuffix: true,
-                        locale: zhCN,
-                      })}
-                    </p>
-                    {isMyMessage && (
-                      <div className="mt-1 text-right text-xs text-gray-200/80 dark:text-gray-400">
+                    <div className="mt-2 flex items-center justify-between gap-2">
+                      <p
+                        className={`text-xs ${isMyMessage
+                          ? 'text-blue-200'
+                          : 'text-gray-500 dark:text-gray-400'
+                          }`}>
+                        {formatDistanceToNow(new Date(message.createdAt), {
+                          addSuffix: true,
+                          locale: zhCN,
+                        })}
+                      </p>
+                      {isMyMessage && (
                         <button
                           type="button"
                           onClick={() => handleDelete(message.id)}
-                          className="underline decoration-dotted hover:text-white dark:hover:text-gray-100">
+                          className="text-xs text-gray-200/80 underline decoration-dotted hover:text-white dark:text-gray-400 dark:hover:text-gray-100">
                           删除
                         </button>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
                 </div>
               );
@@ -257,23 +257,61 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* 输入框 */}
-      <form onSubmit={handleSendMessage} className="flex gap-2">
-        <input
-          type="text"
-          value={messageInput}
-          onChange={(e) => setMessageInput(e.target.value)}
-          placeholder="输入消息..."
-          className="flex-1 rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
-          disabled={sendMessageMutation.isPending}
-        />
-        <button
-          type="submit"
-          disabled={!messageInput.trim() || sendMessageMutation.isPending}
-          className="rounded-lg bg-blue-600 px-6 py-2 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
-          {sendMessageMutation.isPending ? '发送中...' : '发送'}
-        </button>
-      </form>
+      {/* 输入框区域 */}
+      <div className="border-t border-gray-200 bg-white px-6 py-4 dark:border-gray-700 dark:bg-gray-900">
+        <form onSubmit={handleSendMessage} className="space-y-3">
+          {/* 工具栏 */}
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="表情">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-gray-100 hover:text-gray-700 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-300"
+              title="图片">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+              </svg>
+            </button>
+          </div>
+
+          {/* 输入框 */}
+          <div className="flex items-end gap-3">
+            <div className="flex-1">
+              <textarea
+                value={messageInput}
+                onChange={(e) => setMessageInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e);
+                  }
+                }}
+                placeholder="请输入消息内容"
+                rows={3}
+                maxLength={500}
+                className="w-full resize-none rounded-lg border border-gray-300 px-4 py-3 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500/20 dark:border-gray-600 dark:bg-gray-800 dark:text-gray-100"
+                disabled={sendMessageMutation.isPending}
+              />
+              <div className="mt-1 flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+                <span>按 Enter 发送，Shift + Enter 换行</span>
+                <span>{messageInput.length}/500</span>
+              </div>
+            </div>
+            <button
+              type="submit"
+              disabled={!messageInput.trim() || sendMessageMutation.isPending}
+              className="rounded-lg bg-blue-600 px-6 py-3 font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {sendMessageMutation.isPending ? '发送中...' : '发送'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

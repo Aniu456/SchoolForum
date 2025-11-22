@@ -6,7 +6,7 @@ import { Button, LoadingState } from '@/components'
 import { useCreateMarketplaceItem } from '@/hooks/useMarketplace'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/utils/toast-hook'
-import type { ItemCategory, ItemCondition, TradeMethod, CreateMarketplaceItemRequest } from '@/types'
+import type { ItemCategory, ItemCondition, CreateMarketplaceItemRequest } from '@/types'
 
 const CATEGORY_OPTIONS: { value: ItemCategory; label: string }[] = [
     { value: 'ELECTRONICS', label: '电子产品' },
@@ -27,11 +27,6 @@ const CONDITION_OPTIONS: { value: ItemCondition; label: string }[] = [
     { value: 'POOR', label: '较差' },
 ]
 
-const TRADE_METHOD_OPTIONS: { value: TradeMethod; label: string }[] = [
-    { value: 'MEET', label: '当面交易' },
-    { value: 'DELIVERY', label: '邮寄' },
-    { value: 'BOTH', label: '当面或邮寄' },
-]
 
 export default function MarketplaceFormPage() {
     const navigate = useNavigate()
@@ -42,13 +37,11 @@ export default function MarketplaceFormPage() {
     const [title, setTitle] = useState('')
     const [description, setDescription] = useState('')
     const [price, setPrice] = useState('')
-    const [originalPrice, setOriginalPrice] = useState('')
     const [category, setCategory] = useState<ItemCategory>('ELECTRONICS')
     const [condition, setCondition] = useState<ItemCondition>('LIKE_NEW')
-    const [tradeMethod, setTradeMethod] = useState<TradeMethod>('MEET')
     const [location, setLocation] = useState('')
+    const [contact, setContact] = useState('')
     const [imageUrls, setImageUrls] = useState('')
-    const [isAnonymous, setIsAnonymous] = useState(false)
 
     if (!user) {
         navigate('/login')
@@ -74,6 +67,11 @@ export default function MarketplaceFormPage() {
             return
         }
 
+        if (!contact.trim()) {
+            showError('请输入联系方式')
+            return
+        }
+
         const images = imageUrls
             .split(/\n|,/)
             .map((url) => url.trim())
@@ -88,13 +86,11 @@ export default function MarketplaceFormPage() {
             title: title.trim(),
             description: description.trim(),
             price: priceNumber,
-            originalPrice: originalPrice ? Number(originalPrice) || undefined : undefined,
             category,
             condition,
             images,
-            tradeMethod,
             location: location || undefined,
-            isAnonymous,
+            contact: contact.trim(),
         }
 
         try {
@@ -131,32 +127,19 @@ export default function MarketplaceFormPage() {
                     />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">价格 (¥)</label>
-                        <input
-                            type="number"
-                            value={price}
-                            onChange={(e) => setPrice(e.target.value)}
-                            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                            min={0}
-                            step={0.01}
-                        />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">原价 (可选)</label>
-                        <input
-                            type="number"
-                            value={originalPrice}
-                            onChange={(e) => setOriginalPrice(e.target.value)}
-                            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                            min={0}
-                            step={0.01}
-                        />
-                    </div>
+                <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">价格 (¥)</label>
+                    <input
+                        type="number"
+                        value={price}
+                        onChange={(e) => setPrice(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        min={0}
+                        step={0.01}
+                    />
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-3">
+                <div className="grid gap-4 md:grid-cols-2">
                     <div>
                         <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">分类</label>
                         <select
@@ -186,21 +169,6 @@ export default function MarketplaceFormPage() {
                             ))}
                         </select>
                     </div>
-
-                    <div>
-                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">交易方式</label>
-                        <select
-                            value={tradeMethod}
-                            onChange={(e) => setTradeMethod(e.target.value as TradeMethod)}
-                            className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-                        >
-                            {TRADE_METHOD_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>
-                                    {opt.label}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
                 </div>
 
                 <div>
@@ -214,6 +182,17 @@ export default function MarketplaceFormPage() {
                 </div>
 
                 <div>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">联系方式 *</label>
+                    <input
+                        value={contact}
+                        onChange={(e) => setContact(e.target.value)}
+                        className="mt-2 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
+                        placeholder="例如：微信：xxx 或 QQ：xxx"
+                        required
+                    />
+                </div>
+
+                <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">图片 URL（每行一条或用逗号分隔）</label>
                     <textarea
                         value={imageUrls}
@@ -223,16 +202,6 @@ export default function MarketplaceFormPage() {
                         placeholder="https://example.com/image1.jpg"
                     />
                 </div>
-
-                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                    <input
-                        type="checkbox"
-                        checked={isAnonymous}
-                        onChange={(e) => setIsAnonymous(e.target.checked)}
-                        className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                    />
-                    <span>匿名发布（对其他用户隐藏个人信息）</span>
-                </label>
 
                 <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-6 dark:border-gray-800">
                     <Button type="button" variant="outline" onClick={() => navigate(-1)}>

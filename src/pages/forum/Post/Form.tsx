@@ -6,7 +6,7 @@ import { useCreatePost, useUpdatePost, usePost } from '@/hooks/usePosts';
 import { useToast } from '@/utils/toast-hook';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LoadingState, RichTextEditor, Button } from '@/components';
-import { draftApi } from '@/api';
+import { draftApi, uploadApi } from '@/api';
 import { addActivity } from '@/utils/activity';
 import type { CreatePostRequest } from '@/types';
 
@@ -30,6 +30,7 @@ export default function PostFormPage() {
   const [content, setContent] = useState('');
   const [tags, setTags] = useState('');
   const [coverImage, setCoverImage] = useState('');
+  const [isUploadingCover, setIsUploadingCover] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId);
 
@@ -54,6 +55,7 @@ export default function PostFormPage() {
         setTitle(post.title);
         setContent(post.content);
         setTags(post.tags?.join(', ') || '');
+        setCoverImage(post.images?.[0] || '');
       }
     };
     loadDraft();
@@ -81,6 +83,16 @@ export default function PostFormPage() {
       return;
     }
 
+    if (coverImage) {
+      const trimmed = coverImage.trim();
+      const isValidUrl = /^https?:\/\/.+\.(png|jpe?g|gif|webp|svg)$/i.test(trimmed);
+      if (!isValidUrl) {
+        showError('封面图片 URL 格式不正确，请使用 http(s) 的图片链接');
+        return;
+      }
+      setCoverImage(trimmed);
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -92,6 +104,7 @@ export default function PostFormPage() {
       const postData: CreatePostRequest = {
         title: title.trim(),
         content: content.trim(),
+        images: coverImage ? [coverImage.trim()] : undefined,
         tags: tagsArray,
       };
 
@@ -128,6 +141,38 @@ export default function PostFormPage() {
     } catch {
       showError(isEdit ? '更新失败，请重试' : '发布失败，请重试');
       setIsSubmitting(false);
+    }
+  };
+
+  const handleCoverFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setIsUploadingCover(true);
+    try {
+      const res = await uploadApi.uploadImage(file);
+      const url = res.url?.trim();
+      if (url) {
+        setCoverImage(url);
+        showSuccess('封面已上传');
+      } else {
+        showError('上传成功但未返回 URL');
+      }
+    } catch {
+      showError('封面上传失败，请重试');
+    } finally {
+      setIsUploadingCover(false);
+      event.target.value = '';
+    }
+  };
+
+  const handleUploadEditorImage = async (file: File) => {
+    try {
+      const res = await uploadApi.uploadImage(file);
+      showSuccess('图片已上传');
+      return res.url;
+    } catch {
+      showError('图片上传失败，请重试');
+      return '';
     }
   };
 
@@ -191,6 +236,7 @@ export default function PostFormPage() {
           <RichTextEditor
             content={content}
             onChange={setContent}
+            onUploadImage={handleUploadEditorImage}
             placeholder="写下你的想法..."
             className="mt-2 min-h-[400px]"
           />
@@ -225,6 +271,23 @@ export default function PostFormPage() {
             className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
             placeholder="https://example.com/image.jpg"
           />
+          <div className="mt-3 flex flex-wrap items-center gap-4">
+            <label className="inline-flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700 cursor-pointer">
+              <input type="file" accept="image/*" onChange={handleCoverFile} className="hidden" />
+              <span>{isUploadingCover ? '上传中...' : '选择本地图片上传'}</span>
+            </label>
+            {coverImage && !isUploadingCover && (
+              <div className="flex items-center gap-2">
+                <img src={coverImage} alt="封面预览" className="h-16 w-24 rounded-lg object-cover border border-gray-200" />
+                <Button type="button" variant="ghost" size="sm" onClick={() => setCoverImage('')}>
+                  移除封面
+                </Button>
+              </div>
+            )}
+            {!coverImage && !isUploadingCover && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">支持 http/https 图片链接，或直接上传生成 URL</span>
+            )}
+          </div>
         </div>
 
         {/* 操作按钮 */}
@@ -247,4 +310,3 @@ export default function PostFormPage() {
     </div>
   );
 }
-
