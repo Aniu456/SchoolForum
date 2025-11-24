@@ -72,7 +72,7 @@ export default function PostFormPage() {
   }
 
   const isValidImageFile = (file: File, maxSize: number) => {
-    if (!UPLOAD_CONFIG.image.allowedTypes.includes(file.type)) {
+    if (!UPLOAD_CONFIG.image.allowedTypes.some((type) => type === file.type)) {
       showError('只支持 JPG、PNG、GIF、WebP 格式');
       return false;
     }

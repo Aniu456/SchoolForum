@@ -1,21 +1,30 @@
-'use client'
+"use client"
 
-import { useState, useEffect, useRef } from 'react'
-import { useNavigate, useLocation, Link } from 'react-router-dom'
-import { Avatar, PostCard, EmptyState, LoadingState, Button, Card } from '@/components'
-import { formatTime } from '@/utils/format'
-import { useAuthStore } from '@/store/useAuthStore'
-import { usePosts } from '@/hooks/usePosts'
-import { useFollowingActivities } from '@/hooks/useActivity'
-import { useToast } from '@/utils/toast-hook'
-import { favoriteApi, draftApi, followApi, pointsApi, uploadApi, userApi, type FavoriteFolder, type Favorite } from '@/api'
-import { UPLOAD_CONFIG } from '@/config/constants'
-import type { Post } from '@/types'
-import type { Draft } from '@/api/content/draft'
-import { useUserFollowers, useUserFollowing } from '@/hooks/useUsers'
-import { useQueryClient, useQuery } from '@tanstack/react-query'
+import {
+  draftApi,
+  favoriteApi,
+  followApi,
+  pointsApi,
+  uploadApi,
+  userApi,
+  type Favorite,
+  type FavoriteFolder,
+} from "@/api"
+import type { Draft } from "@/api/content/draft"
+import { Avatar, Button, Card, EmptyState, LoadingState, PostCard } from "@/components"
+import { UPLOAD_CONFIG } from "@/config/constants"
+import { useFollowingActivities } from "@/hooks/useActivity"
+import { usePosts } from "@/hooks/usePosts"
+import { useUserFollowers, useUserFollowing } from "@/hooks/useUsers"
+import { useAuthStore } from "@/store/useAuthStore"
+import type { Post } from "@/types"
+import { formatTime } from "@/utils/format"
+import { useToast } from "@/utils/toast-hook"
+import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useEffect, useRef, useState } from "react"
+import { Link, useLocation, useNavigate } from "react-router-dom"
 
-type Tab = 'posts' | 'favorites' | 'drafts' | 'connections' | 'activity' | 'points' | 'settings'
+type Tab = "posts" | "favorites" | "drafts" | "connections" | "activity" | "points" | "settings"
 
 export default function ProfilePage() {
   const location = useLocation()
@@ -33,16 +42,24 @@ export default function ProfilePage() {
   const CONNECTIONS_LIMIT = 20 // 每页显示 20 条
 
   // 关注/粉丝子标签
-  const [connectionsSubTab, setConnectionsSubTab] = useState<'following' | 'followers'>('following')
+  const [connectionsSubTab, setConnectionsSubTab] = useState<"following" | "followers">("following")
 
-  const { data: followingData, isLoading: followingLoading, refetch: refetchFollowing } = useUserFollowing(currentUser?.id || '', followingPage, CONNECTIONS_LIMIT)
-  const { data: followersData, isLoading: followersLoading, refetch: refetchFollowers } = useUserFollowers(currentUser?.id || '', followersPage, CONNECTIONS_LIMIT)
+  const {
+    data: followingData,
+    isLoading: followingLoading,
+    refetch: refetchFollowing,
+  } = useUserFollowing(currentUser?.id || "", followingPage, CONNECTIONS_LIMIT)
+  const {
+    data: followersData,
+    isLoading: followersLoading,
+    refetch: refetchFollowers,
+  } = useUserFollowers(currentUser?.id || "", followersPage, CONNECTIONS_LIMIT)
 
   // 关注状态管理
   const [followingStates, setFollowingStates] = useState<Record<string, boolean>>({})
 
   // 动态类型筛选
-  const [activityType, setActivityType] = useState<'all' | 'posts' | 'comments' | 'likes' | 'favorites'>('all')
+  const [activityType, setActivityType] = useState<"all" | "posts" | "comments" | "likes" | "favorites">("all")
 
   // 动态分页和排序
   const [activityPage, setActivityPage] = useState(1)
@@ -50,19 +67,23 @@ export default function ProfilePage() {
   const ACTIVITY_LIMIT = 20
 
   // 关注用户的动态流 - 后端已实现，返回格式: {type, id, author, content, createdAt, data}
-  const { data: activitiesData, isLoading: isActivitiesLoading } = useFollowingActivities({ page: activityPage, limit: ACTIVITY_LIMIT })
+  const { data: activitiesData, isLoading: isActivitiesLoading } = useFollowingActivities({
+    page: activityPage,
+    limit: ACTIVITY_LIMIT,
+  })
   const allActivities = activitiesData?.data || []
 
   // 动态类型筛选和排序
-  const filteredActivities = activityType === 'all'
-    ? allActivities
-    : allActivities.filter((activity: any) => {
-      if (activityType === 'posts') return activity.type === 'POST'
-      if (activityType === 'comments') return activity.type === 'COMMENT'
-      if (activityType === 'likes') return activity.type === 'LIKE'
-      if (activityType === 'favorites') return activity.type === 'FAVORITE'
-      return true
-    })
+  const filteredActivities =
+    activityType === "all"
+      ? allActivities
+      : allActivities.filter((activity: any) => {
+        if (activityType === "posts") return activity.type === "POST"
+        if (activityType === "comments") return activity.type === "COMMENT"
+        if (activityType === "likes") return activity.type === "LIKE"
+        if (activityType === "favorites") return activity.type === "FAVORITE"
+        return true
+      })
 
   // 排序逻辑
   const activities = [...filteredActivities].sort((a: any, b: any) => {
@@ -82,22 +103,22 @@ export default function ProfilePage() {
   const [isDraftsLoading, setIsDraftsLoading] = useState(false)
 
   // 积分相关状态
-  const [pointsTab, setPointsTab] = useState<'overview' | 'history' | 'leaderboard'>('overview')
+  const [pointsTab, setPointsTab] = useState<"overview" | "history" | "leaderboard">("overview")
   const [historyPage, setHistoryPage] = useState(1)
 
   // 根据路由确定默认 tab
   const getDefaultTab = (): Tab => {
-    if (location.pathname === '/settings') return 'settings'
-    if (location.pathname === '/favorites') return 'favorites'
-    if (location.pathname === '/drafts') return 'drafts'
-    if (location.pathname === '/connections') return 'connections'
-    if (location.pathname === '/activity') return 'activity'
-    if (location.pathname === '/points') return 'points'
+    if (location.pathname === "/settings") return "settings"
+    if (location.pathname === "/favorites") return "favorites"
+    if (location.pathname === "/drafts") return "drafts"
+    if (location.pathname === "/connections") return "connections"
+    if (location.pathname === "/activity") return "activity"
+    if (location.pathname === "/points") return "points"
     // 检查URL查询参数
     const params = new URLSearchParams(location.search)
-    const tabParam = params.get('tab')
-    if (tabParam === 'connections') return 'connections'
-    return 'posts'
+    const tabParam = params.get("tab")
+    if (tabParam === "connections") return "connections"
+    return "posts"
   }
 
   const [activeTab, setActiveTab] = useState<Tab>(getDefaultTab())
@@ -105,39 +126,39 @@ export default function ProfilePage() {
   // 根据URL参数设置子标签
   useEffect(() => {
     const params = new URLSearchParams(location.search)
-    const subtab = params.get('subtab')
-    if (subtab === 'following' || subtab === 'followers') {
+    const subtab = params.get("subtab")
+    if (subtab === "following" || subtab === "followers") {
       setConnectionsSubTab(subtab)
     }
   }, [location.search])
 
   // 积分数据查询
   const { data: myPoints } = useQuery({
-    queryKey: ['points', 'me'],
+    queryKey: ["points", "me"],
     queryFn: () => pointsApi.getMyPoints(),
-    enabled: activeTab === 'points',
+    enabled: activeTab === "points",
   })
 
   const { data: pointsHistory } = useQuery({
-    queryKey: ['points', 'history', historyPage],
+    queryKey: ["points", "history", historyPage],
     queryFn: () => pointsApi.getHistory({ page: historyPage, limit: 20 }),
-    enabled: activeTab === 'points' && pointsTab === 'history',
+    enabled: activeTab === "points" && pointsTab === "history",
   })
 
   const { data: leaderboard } = useQuery({
-    queryKey: ['points', 'leaderboard'],
+    queryKey: ["points", "leaderboard"],
     queryFn: () => pointsApi.getLeaderboard(50),
-    enabled: activeTab === 'points' && pointsTab === 'leaderboard',
+    enabled: activeTab === "points" && pointsTab === "leaderboard",
   })
 
   const points = myPoints
 
   // 设置表单状态
-  const [username, setUsername] = useState(currentUser?.username || '')
-  const [nickname, setNickname] = useState(currentUser?.nickname || '')
-  const [email, setEmail] = useState(currentUser?.email || '')
-  const [bio, setBio] = useState(currentUser?.bio || '')
-  const [avatar, setAvatar] = useState(currentUser?.avatar || '')
+  const [username, setUsername] = useState(currentUser?.username || "")
+  const [nickname, setNickname] = useState(currentUser?.nickname || "")
+  const [email, setEmail] = useState(currentUser?.email || "")
+  const [bio, setBio] = useState(currentUser?.bio || "")
+  const [avatar, setAvatar] = useState(currentUser?.avatar || "")
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
 
@@ -148,7 +169,7 @@ export default function ProfilePage() {
       const response = await favoriteApi.getFolders()
       setFavoriteFolders(response.data || [])
     } catch {
-      showError('加载收藏夹失败')
+      showError("加载收藏夹失败")
       setFavoriteFolders([])
     } finally {
       setIsFavoritesLoading(false)
@@ -161,7 +182,7 @@ export default function ProfilePage() {
       const response = await favoriteApi.getFolderPosts(folderId)
       setFolderPosts(response.data || [])
     } catch {
-      showError('加载收藏失败')
+      showError("加载收藏失败")
       setFolderPosts([])
     }
   }
@@ -169,11 +190,11 @@ export default function ProfilePage() {
   // 当 currentUser 变化时，同步状态
   useEffect(() => {
     if (currentUser) {
-      setUsername(currentUser.username || '')
-      setNickname(currentUser.nickname || '')
-      setEmail(currentUser.email || '')
-      setBio(currentUser.bio || '')
-      setAvatar(currentUser.avatar || '')
+      setUsername(currentUser.username || "")
+      setNickname(currentUser.nickname || "")
+      setEmail(currentUser.email || "")
+      setBio(currentUser.bio || "")
+      setAvatar(currentUser.avatar || "")
     }
   }, [currentUser])
 
@@ -182,37 +203,37 @@ export default function ProfilePage() {
     try {
       if (currentlyFollowing) {
         await followApi.unfollowUser(userId)
-        showSuccess('已取消关注')
+        showSuccess("已取消关注")
       } else {
         await followApi.followUser(userId)
-        showSuccess('关注成功')
+        showSuccess("关注成功")
       }
 
       // 刷新缓存
-      await queryClient.invalidateQueries({ queryKey: ['user', userId] })
-      await queryClient.invalidateQueries({ queryKey: ['users'] })
-      await queryClient.invalidateQueries({ queryKey: ['followers'] })
-      await queryClient.invalidateQueries({ queryKey: ['following'] })
+      await queryClient.invalidateQueries({ queryKey: ["user", userId] })
+      await queryClient.invalidateQueries({ queryKey: ["users"] })
+      await queryClient.invalidateQueries({ queryKey: ["followers"] })
+      await queryClient.invalidateQueries({ queryKey: ["following"] })
 
       // 重新检查关注状态
       const { isFollowing } = await followApi.checkFollowing(userId)
-      setFollowingStates(prev => ({ ...prev, [userId]: isFollowing }))
+      setFollowingStates((prev) => ({ ...prev, [userId]: isFollowing }))
 
       // 刷新列表
       await refetchFollowing()
       await refetchFollowers()
     } catch (error: any) {
-      console.error('关注操作错误:', error)
-      const errorMessage = error?.message || error?.response?.data?.message || error?.data?.message || ''
+      console.error("关注操作错误:", error)
+      const errorMessage = error?.message || error?.response?.data?.message || error?.data?.message || ""
 
-      if (errorMessage.includes('已经关注') || errorMessage.includes('已关注')) {
-        showSuccess('已关注')
-        setFollowingStates(prev => ({ ...prev, [userId]: true }))
-      } else if (errorMessage.includes('未关注')) {
-        showSuccess('已取消关注')
-        setFollowingStates(prev => ({ ...prev, [userId]: false }))
+      if (errorMessage.includes("已经关注") || errorMessage.includes("已关注")) {
+        showSuccess("已关注")
+        setFollowingStates((prev) => ({ ...prev, [userId]: true }))
+      } else if (errorMessage.includes("未关注")) {
+        showSuccess("已取消关注")
+        setFollowingStates((prev) => ({ ...prev, [userId]: false }))
       } else {
-        showError(`操作失败：${errorMessage || '请重试'}`)
+        showError(`操作失败：${errorMessage || "请重试"}`)
       }
 
       await refetchFollowing()
@@ -227,7 +248,7 @@ export default function ProfilePage() {
       const response = await draftApi.getList({ page: 1, limit: 50 })
       setDrafts(response.data || [])
     } catch {
-      showError('加载草稿失败')
+      showError("加载草稿失败")
       setDrafts([])
     } finally {
       setIsDraftsLoading(false)
@@ -242,7 +263,7 @@ export default function ProfilePage() {
   }, [])
 
   if (!currentUser) {
-    navigate('/login')
+    navigate("/login")
     return null
   }
 
@@ -269,23 +290,23 @@ export default function ProfilePage() {
       }
       const updated = await userApi.updateProfile(payload)
       updateUser(updated)
-      await queryClient.invalidateQueries({ queryKey: ['user', currentUser.id] })
-      await queryClient.invalidateQueries({ queryKey: ['users'] })
-      showSuccess('资料已更新')
+      await queryClient.invalidateQueries({ queryKey: ["user", currentUser.id] })
+      await queryClient.invalidateQueries({ queryKey: ["users"] })
+      showSuccess("资料已更新")
     } catch {
-      showError('保存失败，请重试')
+      showError("保存失败，请重试")
     } finally {
       setIsSaving(false)
     }
   }
 
   const validateAvatarFile = (file: File) => {
-    if (!UPLOAD_CONFIG.avatar.allowedTypes.includes(file.type)) {
-      showError('只支持 JPG、PNG、GIF、WebP 格式的头像')
+    if (!UPLOAD_CONFIG.avatar.allowedTypes.some((type) => type === file.type)) {
+      showError("只支持 JPG、PNG、GIF、WebP 格式的头像")
       return false
     }
     if (file.size > UPLOAD_CONFIG.avatar.maxSize) {
-      showError('头像大小不能超过 2MB')
+      showError("头像大小不能超过 2MB")
       return false
     }
     return true
@@ -295,23 +316,23 @@ export default function ProfilePage() {
     const file = event.target.files?.[0]
     if (!file) return
     if (!validateAvatarFile(file)) {
-      event.target.value = ''
+      event.target.value = ""
       return
     }
     setIsUploadingAvatar(true)
     try {
       const res = await uploadApi.uploadAvatar(file)
       if (!res.url) {
-        showError('上传成功但未返回头像 URL')
+        showError("上传成功但未返回头像 URL")
       } else {
         setAvatar(res.url)
-        showSuccess('头像已上传')
+        showSuccess("头像已上传")
       }
     } catch {
-      showError('头像上传失败，请重试')
+      showError("头像上传失败，请重试")
     } finally {
       setIsUploadingAvatar(false)
-      event.target.value = ''
+      event.target.value = ""
     }
   }
 
@@ -356,17 +377,7 @@ export default function ProfilePage() {
               </div>
               <div className="rounded-lg bg-pink-100 px-4 py-2 dark:bg-pink-900">
                 <div className="text-sm text-gray-600 dark:text-gray-400">粉丝</div>
-                <div className="font-semibold text-pink-700 dark:text-pink-300">
-                  {currentUser.followerCount ?? 0}
-                </div>
-              </div>
-              <div className="rounded-lg bg-yellow-100 px-4 py-2 dark:bg-yellow-900">
-                <div className="text-sm text-gray-600 dark:text-gray-400">积分</div>
-                <div className="font-semibold text-yellow-700 dark:text-yellow-300">{currentUser.points ?? 0}</div>
-              </div>
-              <div className="rounded-lg bg-indigo-100 px-4 py-2 dark:bg-indigo-900">
-                <div className="text-sm text-gray-600 dark:text-gray-400">等级</div>
-                <div className="font-semibold text-indigo-700 dark:text-indigo-300">Lv.{currentUser.level ?? 1}</div>
+                <div className="font-semibold text-pink-700 dark:text-pink-300">{currentUser.followerCount ?? 0}</div>
               </div>
             </div>
           </div>
@@ -376,72 +387,79 @@ export default function ProfilePage() {
       {/* Tab 切换 */}
       <div className="mb-6 flex gap-4 border-b border-gray-200 dark:border-gray-700">
         <Button
-          onClick={() => handleTabChange('posts')}
+          onClick={() => handleTabChange("posts")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'posts'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "posts"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           我的帖子 ({userPosts.length})
         </Button>
         <Button
-          onClick={() => handleTabChange('favorites')}
+          onClick={() => handleTabChange("favorites")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'favorites'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "favorites"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           收藏夹 ({favoriteFolders.length})
         </Button>
         <Button
-          onClick={() => handleTabChange('drafts')}
+          onClick={() => handleTabChange("drafts")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'drafts'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "drafts"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           草稿 ({drafts.length})
         </Button>
         <Button
-          onClick={() => handleTabChange('connections')}
+          onClick={() => handleTabChange("connections")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'connections'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "connections"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           关注/粉丝
         </Button>
         <Button
-          onClick={() => handleTabChange('activity')}
+          onClick={() => handleTabChange("activity")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'activity'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "activity"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           动态
         </Button>
         <Button
-          onClick={() => handleTabChange('points')}
+          onClick={() => handleTabChange("points")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'points'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "points"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           积分等级
         </Button>
         <Button
-          onClick={() => handleTabChange('settings')}
+          onClick={() => handleTabChange("settings")}
           variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === 'settings'
-            ? 'border-b-2 border-blue-500 text-blue-600 dark:text-blue-400'
-            : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200'
-            }`}>
+          className={`pb-4 text-lg font-medium ${activeTab === "settings"
+              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
+              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
+            }`}
+        >
           设置
         </Button>
       </div>
 
       {/* 我的帖子 */}
-      {activeTab === 'posts' && (
+      {activeTab === "posts" && (
         <div>
           <div className="space-y-4">
             {userPosts.length > 0 ? (
@@ -452,8 +470,8 @@ export default function ProfilePage() {
                 description="快去发布你的第一篇帖子吧！"
                 icon="📝"
                 action={{
-                  label: '去发帖',
-                  onClick: () => navigate('/posts/new'),
+                  label: "去发帖",
+                  onClick: () => navigate("/posts/new"),
                 }}
               />
             )}
@@ -462,7 +480,7 @@ export default function ProfilePage() {
       )}
 
       {/* 收藏夹 */}
-      {activeTab === 'favorites' && (
+      {activeTab === "favorites" && (
         <div>
           {isFavoritesLoading ? (
             <LoadingState message="加载收藏夹..." />
@@ -476,18 +494,13 @@ export default function ProfilePage() {
                     onClick={() => {
                       setSelectedFolder(folder.id)
                       loadFolderPosts(folder.id)
-                    }}>
-                    <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                      {folder.name}
-                    </h3>
+                    }}
+                  >
+                    <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">{folder.name}</h3>
                     {folder.description && (
-                      <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">
-                        {folder.description}
-                      </p>
+                      <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">{folder.description}</p>
                     )}
-                    <p className="text-sm text-gray-500 dark:text-gray-500">
-                      {folder.favoriteCount} 个收藏
-                    </p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500">{folder.favoriteCount} 个收藏</p>
                   </Card>
                 ))}
               </div>
@@ -495,27 +508,19 @@ export default function ProfilePage() {
               {/* 显示选中收藏夹的帖子 */}
               {selectedFolder && folderPosts.length > 0 && (
                 <div className="mt-6 space-y-4">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                    收藏的帖子
-                  </h3>
-                  {folderPosts.map((favorite) => (
-                    favorite.post && <PostCard key={favorite.id} post={favorite.post} />
-                  ))}
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">收藏的帖子</h3>
+                  {folderPosts.map((favorite) => favorite.post && <PostCard key={favorite.id} post={favorite.post} />)}
                 </div>
               )}
             </div>
           ) : (
-            <EmptyState
-              title="还没有收藏夹"
-              description="创建收藏夹来整理你喜欢的内容吧！"
-              icon="⭐"
-            />
+            <EmptyState title="还没有收藏夹" description="创建收藏夹来整理你喜欢的内容吧！" icon="⭐" />
           )}
         </div>
       )}
 
       {/* 草稿 */}
-      {activeTab === 'drafts' && (
+      {activeTab === "drafts" && (
         <div>
           {isDraftsLoading ? (
             <LoadingState message="加载草稿..." />
@@ -526,11 +531,11 @@ export default function ProfilePage() {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {draft.title || '无标题草稿'}
+                        {draft.title || "无标题草稿"}
                       </h3>
                       {draft.content && (
                         <p className="mb-3 line-clamp-2 text-gray-600 dark:text-gray-400">
-                          {draft.content.replace(/<[^>]*>/g, '').substring(0, 100)}...
+                          {draft.content.replace(/<[^>]*>/g, "").substring(0, 100)}...
                         </p>
                       )}
                       {draft.tags && draft.tags.length > 0 && (
@@ -538,7 +543,8 @@ export default function ProfilePage() {
                           {draft.tags.map((tag) => (
                             <span
                               key={tag}
-                              className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                              className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400"
+                            >
                               #{tag}
                             </span>
                           ))}
@@ -549,10 +555,7 @@ export default function ProfilePage() {
                       </div>
                     </div>
                     <div className="ml-4 flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => navigate(`/posts/new?draft=${draft.id}`)}>
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/posts/new?draft=${draft.id}`)}>
                         继续编辑
                       </Button>
                       <Button
@@ -561,12 +564,13 @@ export default function ProfilePage() {
                         onClick={async () => {
                           try {
                             await draftApi.delete(draft.id)
-                            showSuccess('草稿已删除')
+                            showSuccess("草稿已删除")
                             loadDrafts()
                           } catch {
-                            showError('删除失败')
+                            showError("删除失败")
                           }
-                        }}>
+                        }}
+                      >
                         删除
                       </Button>
                     </div>
@@ -580,39 +584,41 @@ export default function ProfilePage() {
               description="开始写作，系统会自动保存您的草稿"
               icon="📝"
               action={{
-                label: '去发帖',
-                onClick: () => navigate('/posts/new'),
+                label: "去发帖",
+                onClick: () => navigate("/posts/new"),
               }}
             />
           )}
         </div>
       )}
       {/* 关注/粉丝 */}
-      {activeTab === 'connections' && (
+      {activeTab === "connections" && (
         <div>
           {/* 子标签切换 */}
           <div className="mb-6 flex items-center gap-2 border-b border-gray-200 dark:border-gray-700">
             <button
-              onClick={() => setConnectionsSubTab('following')}
-              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === 'following'
-                ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                }`}>
+              onClick={() => setConnectionsSubTab("following")}
+              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === "following"
+                  ? "border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                }`}
+            >
               我的关注 ({currentUser?.followingCount ?? 0})
             </button>
             <button
-              onClick={() => setConnectionsSubTab('followers')}
-              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === 'followers'
-                ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                }`}>
+              onClick={() => setConnectionsSubTab("followers")}
+              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === "followers"
+                  ? "border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                }`}
+            >
               我的粉丝 ({currentUser?.followerCount ?? 0})
             </button>
           </div>
 
           <div>
             {/* 关注列表 */}
-            {connectionsSubTab === 'following' && (
+            {connectionsSubTab === "following" && (
               <Card className="p-6">
                 {followingLoading ? (
                   <LoadingState message="加载关注列表..." />
@@ -620,13 +626,19 @@ export default function ProfilePage() {
                   <>
                     <div className="space-y-3">
                       {(followingData as any)?.data?.map((u: any) => (
-                        <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                        <div
+                          key={u.id}
+                          className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800"
+                        >
                           <div
                             className="flex flex-1 cursor-pointer items-center gap-3"
-                            onClick={() => navigate(`/users/${u.id}`)}>
+                            onClick={() => navigate(`/users/${u.id}`)}
+                          >
                             <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
                             <div>
-                              <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                              <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                {u.nickname || u.username}
+                              </div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
                               </div>
@@ -639,7 +651,8 @@ export default function ProfilePage() {
                               onClick={(e) => {
                                 e.stopPropagation()
                                 handleToggleFollow(u.id, true)
-                              }}>
+                              }}
+                            >
                               取消关注
                             </Button>
                           </div>
@@ -656,31 +669,29 @@ export default function ProfilePage() {
                           size="sm"
                           variant="outline"
                           disabled={followingPage === 1}
-                          onClick={() => setFollowingPage(p => Math.max(1, p - 1))}>
+                          onClick={() => setFollowingPage((p) => Math.max(1, p - 1))}
+                        >
                           上一页
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={followingPage >= ((followingData as any)?.meta?.totalPages || 1)}
-                          onClick={() => setFollowingPage(p => p + 1)}>
+                          onClick={() => setFollowingPage((p) => p + 1)}
+                        >
                           下一页
                         </Button>
                       </div>
                     </div>
                   </>
                 ) : (
-                  <EmptyState
-                    title="暂无关注"
-                    description="快去关注感兴趣的用户吧！"
-                    icon="👥"
-                  />
+                  <EmptyState title="暂无关注" description="快去关注感兴趣的用户吧！" icon="👥" />
                 )}
               </Card>
             )}
 
             {/* 粉丝列表 */}
-            {connectionsSubTab === 'followers' && (
+            {connectionsSubTab === "followers" && (
               <Card className="p-6">
                 {followersLoading ? (
                   <LoadingState message="加载粉丝列表..." />
@@ -689,17 +700,25 @@ export default function ProfilePage() {
                     <div className="space-y-3">
                       {(followersData as any)?.data?.map((u: any) => {
                         // 检查是否互相关注
-                        const isFollowingBack = followingStates[u.id] ?? ((followingData as any)?.data?.some((f: any) => f.id === u.id) || false)
+                        const isFollowingBack =
+                          followingStates[u.id] ??
+                          ((followingData as any)?.data?.some((f: any) => f.id === u.id) || false)
 
                         return (
-                          <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                          <div
+                            key={u.id}
+                            className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800"
+                          >
                             <div
                               className="flex flex-1 cursor-pointer items-center gap-3"
-                              onClick={() => navigate(`/users/${u.id}`)}>
+                              onClick={() => navigate(`/users/${u.id}`)}
+                            >
                               <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
                               <div>
                                 <div className="flex items-center gap-2">
-                                  <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                                  <div className="font-semibold text-gray-900 dark:text-gray-100">
+                                    {u.nickname || u.username}
+                                  </div>
                                   {isFollowingBack && (
                                     <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
                                       互相关注
@@ -718,8 +737,9 @@ export default function ProfilePage() {
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   handleToggleFollow(u.id, isFollowingBack)
-                                }}>
-                                {isFollowingBack ? '已关注' : '关注'}
+                                }}
+                              >
+                                {isFollowingBack ? "已关注" : "关注"}
                               </Button>
                             </div>
                           </div>
@@ -736,25 +756,23 @@ export default function ProfilePage() {
                           size="sm"
                           variant="outline"
                           disabled={followersPage === 1}
-                          onClick={() => setFollowersPage(p => Math.max(1, p - 1))}>
+                          onClick={() => setFollowersPage((p) => Math.max(1, p - 1))}
+                        >
                           上一页
                         </Button>
                         <Button
                           size="sm"
                           variant="outline"
                           disabled={followersPage >= ((followersData as any)?.meta?.totalPages || 1)}
-                          onClick={() => setFollowersPage(p => p + 1)}>
+                          onClick={() => setFollowersPage((p) => p + 1)}
+                        >
                           下一页
                         </Button>
                       </div>
                     </div>
                   </>
                 ) : (
-                  <EmptyState
-                    title="暂无粉丝"
-                    description="发布优质内容吸引粉丝关注吧！"
-                    icon="⭐"
-                  />
+                  <EmptyState title="暂无粉丝" description="发布优质内容吸引粉丝关注吧！" icon="⭐" />
                 )}
               </Card>
             )}
@@ -763,50 +781,52 @@ export default function ProfilePage() {
       )}
 
       {/* 动态 */}
-      {activeTab === 'activity' && (
+      {activeTab === "activity" && (
         <div>
           {/* 动态类型切换、排序和统计信息 */}
           <div className="mb-6 flex items-center justify-between">
             <div className="flex gap-4">
               <Button
                 size="sm"
-                variant={activityType === 'all' ? 'primary' : 'outline'}
-                onClick={() => setActivityType('all')}>
+                variant={activityType === "all" ? "primary" : "outline"}
+                onClick={() => setActivityType("all")}
+              >
                 全部
               </Button>
               <Button
                 size="sm"
-                variant={activityType === 'posts' ? 'primary' : 'outline'}
-                onClick={() => setActivityType('posts')}>
+                variant={activityType === "posts" ? "primary" : "outline"}
+                onClick={() => setActivityType("posts")}
+              >
                 帖子
               </Button>
               <Button
                 size="sm"
-                variant={activityType === 'comments' ? 'primary' : 'outline'}
-                onClick={() => setActivityType('comments')}>
+                variant={activityType === "comments" ? "primary" : "outline"}
+                onClick={() => setActivityType("comments")}
+              >
                 评论
               </Button>
               <Button
                 size="sm"
-                variant={activityType === 'likes' ? 'primary' : 'outline'}
-                onClick={() => setActivityType('likes')}>
+                variant={activityType === "likes" ? "primary" : "outline"}
+                onClick={() => setActivityType("likes")}
+              >
                 点赞
               </Button>
               <Button
                 size="sm"
-                variant={activityType === 'favorites' ? 'primary' : 'outline'}
-                onClick={() => setActivityType('favorites')}>
+                variant={activityType === "favorites" ? "primary" : "outline"}
+                onClick={() => setActivityType("favorites")}
+              >
                 收藏
               </Button>
             </div>
 
             {/* 排序和统计信息 */}
             <div className="flex items-center gap-4">
-              <Button
-                size="sm"
-                variant="primary"
-                onClick={() => setActivitySortDesc(!activitySortDesc)}>
-                {activitySortDesc ? '最新' : '最旧'}
+              <Button size="sm" variant="primary" onClick={() => setActivitySortDesc(!activitySortDesc)}>
+                {activitySortDesc ? "最新" : "最旧"}
               </Button>
               <div className="text-sm text-gray-600 dark:text-gray-400">
                 共 {activitiesData?.meta?.total || 0} 条动态
@@ -835,12 +855,13 @@ export default function ProfilePage() {
                     {/* 动态内容 */}
                     <div className="flex-1">
                       {/* 新帖子 */}
-                      {activity.type === 'POST' && (
+                      {activity.type === "POST" && (
                         <>
                           <div className="mb-2">
                             <Link
                               to={`/users/${activity.author.id}`}
-                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400"
+                            >
                               {activity.author.nickname || activity.author.username}
                             </Link>
                             <span className="text-gray-600 dark:text-gray-400"> 发布了新帖子</span>
@@ -862,20 +883,19 @@ export default function ProfilePage() {
                       )}
 
                       {/* 评论 */}
-                      {activity.type === 'COMMENT' && (
+                      {activity.type === "COMMENT" && (
                         <>
                           <div className="mb-2">
                             <Link
                               to={`/users/${activity.author.id}`}
-                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400"
+                            >
                               {activity.author.nickname || activity.author.username}
                             </Link>
                             <span className="text-gray-600 dark:text-gray-400"> 发表了评论</span>
                           </div>
                           <div className="rounded-lg bg-gray-50 p-4 dark:bg-gray-800">
-                            <p className="text-sm text-gray-700 dark:text-gray-300">
-                              {activity.content}
-                            </p>
+                            <p className="text-sm text-gray-700 dark:text-gray-300">{activity.content}</p>
                             <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
                               {formatTime(activity.createdAt)}
                             </div>
@@ -884,12 +904,13 @@ export default function ProfilePage() {
                       )}
 
                       {/* 公告 */}
-                      {activity.type === 'ANNOUNCEMENT' && (
+                      {activity.type === "ANNOUNCEMENT" && (
                         <>
                           <div className="mb-2">
                             <Link
                               to={`/users/${activity.author.id}`}
-                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400"
+                            >
                               {activity.author.nickname || activity.author.username}
                             </Link>
                             <span className="text-gray-600 dark:text-gray-400"> 发布了公告</span>
@@ -898,9 +919,7 @@ export default function ProfilePage() {
                             <h4 className="mb-2 font-semibold text-blue-900 dark:text-blue-100">
                               {activity.data.title}
                             </h4>
-                            <p className="text-sm text-blue-700 dark:text-blue-300">
-                              {activity.content}
-                            </p>
+                            <p className="text-sm text-blue-700 dark:text-blue-300">{activity.content}</p>
                             <div className="mt-2 text-xs text-blue-600 dark:text-blue-400">
                               {formatTime(activity.createdAt)}
                             </div>
@@ -909,12 +928,13 @@ export default function ProfilePage() {
                       )}
 
                       {/* 点赞 */}
-                      {activity.type === 'LIKE' && (
+                      {activity.type === "LIKE" && (
                         <>
                           <div className="mb-2">
                             <Link
                               to={`/users/${activity.author.id}`}
-                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400"
+                            >
                               {activity.author.nickname || activity.author.username}
                             </Link>
                             <span className="text-gray-600 dark:text-gray-400"> 点赞了</span>
@@ -933,12 +953,13 @@ export default function ProfilePage() {
                       )}
 
                       {/* 收藏 */}
-                      {activity.type === 'FAVORITE' && (
+                      {activity.type === "FAVORITE" && (
                         <>
                           <div className="mb-2">
                             <Link
                               to={`/users/${activity.author.id}`}
-                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400">
+                              className="font-semibold text-gray-900 hover:text-blue-600 dark:text-gray-100 dark:hover:text-blue-400"
+                            >
                               {activity.author.nickname || activity.author.username}
                             </Link>
                             <span className="text-gray-600 dark:text-gray-400"> 收藏了</span>
@@ -970,31 +991,29 @@ export default function ProfilePage() {
                     size="sm"
                     variant="outline"
                     disabled={activityPage === 1}
-                    onClick={() => setActivityPage(p => Math.max(1, p - 1))}>
+                    onClick={() => setActivityPage((p) => Math.max(1, p - 1))}
+                  >
                     上一页
                   </Button>
                   <Button
                     size="sm"
                     variant="outline"
                     disabled={activityPage >= (activitiesData?.meta?.totalPages || 1)}
-                    onClick={() => setActivityPage(p => p + 1)}>
+                    onClick={() => setActivityPage((p) => p + 1)}
+                  >
                     下一页
                   </Button>
                 </div>
               </div>
             </div>
           ) : (
-            <EmptyState
-              title="暂无动态"
-              description="关注用户后，这里将展示他们的新帖子和你收到的评论"
-              icon="📊"
-            />
+            <EmptyState title="暂无动态" description="关注用户后，这里将展示他们的新帖子和你收到的评论" icon="📊" />
           )}
         </div>
       )}
 
       {/* 积分等级 */}
-      {activeTab === 'points' && (
+      {activeTab === "points" && (
         <div className="space-y-6">
           {/* 我的积分卡片 */}
           <Card className="bg-gradient-to-br from-blue-500 to-purple-600 p-6 text-white">
@@ -1035,33 +1054,36 @@ export default function ProfilePage() {
           {/* 子标签切换 */}
           <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
             <button
-              onClick={() => setPointsTab('overview')}
-              className={`px-4 py-2 font-medium transition-colors ${pointsTab === 'overview'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                }`}>
+              onClick={() => setPointsTab("overview")}
+              className={`px-4 py-2 font-medium transition-colors ${pointsTab === "overview"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                }`}
+            >
               等级说明
             </button>
             <button
-              onClick={() => setPointsTab('history')}
-              className={`px-4 py-2 font-medium transition-colors ${pointsTab === 'history'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                }`}>
+              onClick={() => setPointsTab("history")}
+              className={`px-4 py-2 font-medium transition-colors ${pointsTab === "history"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                }`}
+            >
               积分历史
             </button>
             <button
-              onClick={() => setPointsTab('leaderboard')}
-              className={`px-4 py-2 font-medium transition-colors ${pointsTab === 'leaderboard'
-                ? 'border-b-2 border-blue-600 text-blue-600'
-                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
-                }`}>
+              onClick={() => setPointsTab("leaderboard")}
+              className={`px-4 py-2 font-medium transition-colors ${pointsTab === "leaderboard"
+                  ? "border-b-2 border-blue-600 text-blue-600"
+                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
+                }`}
+            >
               排行榜
             </button>
           </div>
 
           {/* 等级说明 */}
-          {pointsTab === 'overview' && (
+          {pointsTab === "overview" && (
             <div className="space-y-4">
               <Card className="p-6">
                 <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">等级体系</h3>
@@ -1070,9 +1092,10 @@ export default function ProfilePage() {
                     <div
                       key={index}
                       className={`flex items-center justify-between rounded-lg border p-3 ${(points?.level || 0) === index
-                        ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                        : 'border-gray-200 dark:border-gray-700'
-                        }`}>
+                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
+                          : "border-gray-200 dark:border-gray-700"
+                        }`}
+                    >
                       <div className="flex items-center gap-3">
                         <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">Lv.{index}</span>
                         {(points?.level || 0) === index && (
@@ -1082,7 +1105,8 @@ export default function ProfilePage() {
                         )}
                       </div>
                       <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {threshold} - {index < 10 ? [100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500][index] - 1 : '∞'} 分
+                        {threshold} -{" "}
+                        {index < 10 ? [100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500][index] - 1 : "∞"} 分
                       </div>
                     </div>
                   ))}
@@ -1122,7 +1146,7 @@ export default function ProfilePage() {
           )}
 
           {/* 积分历史 */}
-          {pointsTab === 'history' && (
+          {pointsTab === "history" && (
             <div className="space-y-3">
               {pointsHistory?.data.map((item: any) => (
                 <Card key={item.id} className="p-4">
@@ -1130,10 +1154,11 @@ export default function ProfilePage() {
                     <div className="flex-1">
                       <div className="mb-1 flex items-center gap-2">
                         <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {item.action.replace(/_/g, ' ')}
+                          {item.action.replace(/_/g, " ")}
                         </span>
-                        <span className={`text-lg font-bold ${item.points > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                          {item.points > 0 ? '+' : ''}{item.points}
+                        <span className={`text-lg font-bold ${item.points > 0 ? "text-green-600" : "text-red-600"}`}>
+                          {item.points > 0 ? "+" : ""}
+                          {item.points}
                         </span>
                       </div>
                       {item.reason && <p className="text-sm text-gray-600 dark:text-gray-400">{item.reason}</p>}
@@ -1150,7 +1175,8 @@ export default function ProfilePage() {
                     variant="outline"
                     size="sm"
                     disabled={historyPage === 1}
-                    onClick={() => setHistoryPage(historyPage - 1)}>
+                    onClick={() => setHistoryPage(historyPage - 1)}
+                  >
                     上一页
                   </Button>
                   <span className="flex items-center px-4 text-sm text-gray-600 dark:text-gray-400">
@@ -1160,7 +1186,8 @@ export default function ProfilePage() {
                     variant="outline"
                     size="sm"
                     disabled={historyPage >= pointsHistory.meta.totalPages}
-                    onClick={() => setHistoryPage(historyPage + 1)}>
+                    onClick={() => setHistoryPage(historyPage + 1)}
+                  >
                     下一页
                   </Button>
                 </div>
@@ -1169,20 +1196,21 @@ export default function ProfilePage() {
           )}
 
           {/* 排行榜 */}
-          {pointsTab === 'leaderboard' && (
+          {pointsTab === "leaderboard" && (
             <div className="space-y-3">
               {leaderboard?.map((item: any, index: number) => (
                 <Card key={item.id} className="p-4">
                   <div className="flex items-center gap-4">
                     <div
                       className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-bold ${index === 0
-                        ? 'bg-yellow-500 text-white'
-                        : index === 1
-                          ? 'bg-gray-400 text-white'
-                          : index === 2
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300'
-                        }`}>
+                          ? "bg-yellow-500 text-white"
+                          : index === 1
+                            ? "bg-gray-400 text-white"
+                            : index === 2
+                              ? "bg-orange-600 text-white"
+                              : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                        }`}
+                    >
                       {index + 1}
                     </div>
 
@@ -1195,7 +1223,7 @@ export default function ProfilePage() {
                         />
                       ) : (
                         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-lg font-semibold text-white">
-                          {(item.user?.nickname || item.user?.username)?.[0] || '?'}
+                          {(item.user?.nickname || item.user?.username)?.[0] || "?"}
                         </div>
                       )}
                       <div className="flex-1">
@@ -1219,7 +1247,7 @@ export default function ProfilePage() {
       )}
 
       {/* 设置 */}
-      {activeTab === 'settings' && (
+      {activeTab === "settings" && (
         <div className="space-y-6">
           {/* 个人资料 */}
           <Card className="p-6">
@@ -1230,7 +1258,13 @@ export default function ProfilePage() {
                 <div className="flex items-center gap-4">
                   <Avatar src={avatar} alt="头像" username={username} size={80} seed={currentUser.id} />
                   <div className="flex items-center gap-3">
-                    <input ref={avatarInputRef} type="file" accept="image/*" onChange={handleAvatarChange} className="text-sm" />
+                    <input
+                      ref={avatarInputRef}
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAvatarChange}
+                      className="text-sm"
+                    />
                     {isUploadingAvatar && <span className="text-sm text-gray-500">上传中...</span>}
                   </div>
                   <Button variant="outline" size="sm" type="button" onClick={() => avatarInputRef.current?.click()}>
@@ -1251,7 +1285,9 @@ export default function ProfilePage() {
                   className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
                   placeholder="请输入昵称"
                 />
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">昵称将展示给其他用户，用户名仅用于登录不可修改</p>
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  昵称将展示给其他用户，用户名仅用于登录不可修改
+                </p>
               </div>
 
               <div>
@@ -1285,7 +1321,7 @@ export default function ProfilePage() {
 
               <div className="flex justify-end">
                 <Button type="submit" variant="primary" disabled={isSaving}>
-                  {isSaving ? '保存中...' : '保存更改'}
+                  {isSaving ? "保存中..." : "保存更改"}
                 </Button>
               </div>
             </form>
@@ -1295,8 +1331,6 @@ export default function ProfilePage() {
           <Card className="p-6">
             <h2 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">偏好设置</h2>
             <div className="space-y-4">
-
-
               <div className="flex items-center justify-between">
                 <div>
                   <p className="font-medium text-gray-900 dark:text-gray-100">邮件通知</p>

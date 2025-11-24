@@ -59,7 +59,7 @@ export default function MarketplaceFormPage() {
         }
 
         for (const file of files) {
-            if (!UPLOAD_CONFIG.image.allowedTypes.includes(file.type)) {
+            if (!UPLOAD_CONFIG.image.allowedTypes.some((type) => type === file.type)) {
                 showError('只支持 JPG、PNG、GIF、WebP 格式')
                 return false
             }
@@ -255,7 +255,7 @@ export default function MarketplaceFormPage() {
                     <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
                         <div>
                             <p className="font-medium">本地上传</p>
-                            <p className="text-xs text-gray-500 dark:text-gray-400">选择图片自动上传并填充 URL（单张<=5MB，最多9张）</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">选择图片自动上传并填充 单张小于5MB,最多9张</p>
                         </div>
                         <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-600 shadow-sm ring-1 ring-blue-100 transition hover:bg-blue-50 dark:bg-gray-900 dark:text-blue-300 dark:ring-blue-900/60">
                             选择文件

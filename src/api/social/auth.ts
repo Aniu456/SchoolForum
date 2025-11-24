@@ -1,4 +1,5 @@
 import { api } from '../core/client';
+import type { User } from '@/types';
 
 export interface LoginRequest {
   email: string;
@@ -13,14 +14,7 @@ export interface RegisterRequest {
 }
 
 export interface AuthResponse {
-  user: {
-    id: string;
-    username: string;
-    email: string;
-    nickname: string;
-    avatar: string;
-    role: string;
-  };
+  user: User;
   accessToken: string;
   refreshToken: string;
 }
