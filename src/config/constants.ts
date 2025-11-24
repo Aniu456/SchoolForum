@@ -90,9 +90,30 @@ export const ROUTES = {
 // 文件上传配置
 // ============================================
 export const UPLOAD_CONFIG = {
-  maxSize: 10 * 1024 * 1024, // 10MB
-  allowedImageTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
-  allowedFileTypes: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+  avatar: {
+    maxSize: 2 * 1024 * 1024, // 2MB
+    maxCount: 1,
+    allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  },
+  image: {
+    maxSize: 5 * 1024 * 1024, // 5MB
+    maxCount: 9,
+    allowedTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+  },
+  document: {
+    maxSize: 20 * 1024 * 1024, // 20MB
+    allowedTypes: [
+      'application/pdf',
+      'application/msword',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      'application/vnd.ms-excel',
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      'application/vnd.ms-powerpoint',
+      'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      'application/zip',
+      'application/x-zip-compressed',
+    ],
+  },
 } as const;
 
 // ============================================
@@ -146,4 +167,3 @@ export const TOAST_CONFIG = {
   duration: 3000,
   position: 'top-right' as const,
 } as const;
-

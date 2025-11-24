@@ -41,33 +41,33 @@ const CATEGORY_LABELS: Record<string, string> = {
 }
 
 const RESOURCE_TYPE_META: Record<ResourceType | string, { className: string; badgeClass: string; icon: JSX.Element }> =
-{
-  DOCUMENT: {
-    className: "bg-amber-50 text-amber-600",
-    badgeClass: "bg-amber-100 text-amber-700",
-    icon: <BookOpen className="h-5 w-5" />,
-  },
-  VIDEO: {
-    className: "bg-rose-50 text-rose-600",
-    badgeClass: "bg-rose-100 text-rose-700",
-    icon: <MessageCircle className="h-5 w-5 rotate-90" />,
-  },
-  CODE: {
-    className: "bg-indigo-50 text-indigo-600",
-    badgeClass: "bg-indigo-100 text-indigo-700",
-    icon: <Tag className="h-5 w-5" />,
-  },
-  LINK: {
-    className: "bg-sky-50 text-sky-600",
-    badgeClass: "bg-sky-100 text-sky-700",
-    icon: <ArrowRight className="h-5 w-5" />,
-  },
-  OTHER: {
-    className: "bg-gray-50 text-gray-600",
-    badgeClass: "bg-gray-100 text-gray-700",
-    icon: <BookOpen className="h-5 w-5" />,
-  },
-}
+  {
+    DOCUMENT: {
+      className: "bg-amber-50 text-amber-600",
+      badgeClass: "bg-amber-100 text-amber-700",
+      icon: <BookOpen className="h-5 w-5" />,
+    },
+    VIDEO: {
+      className: "bg-rose-50 text-rose-600",
+      badgeClass: "bg-rose-100 text-rose-700",
+      icon: <MessageCircle className="h-5 w-5 rotate-90" />,
+    },
+    CODE: {
+      className: "bg-indigo-50 text-indigo-600",
+      badgeClass: "bg-indigo-100 text-indigo-700",
+      icon: <Tag className="h-5 w-5" />,
+    },
+    LINK: {
+      className: "bg-sky-50 text-sky-600",
+      badgeClass: "bg-sky-100 text-sky-700",
+      icon: <ArrowRight className="h-5 w-5" />,
+    },
+    OTHER: {
+      className: "bg-gray-50 text-gray-600",
+      badgeClass: "bg-gray-100 text-gray-700",
+      icon: <BookOpen className="h-5 w-5" />,
+    },
+  }
 
 type MainTab = (typeof MAIN_TABS)[number]["key"]
 
@@ -113,7 +113,9 @@ function MarketplaceCard({
           </div>
         )}
         <div className="flex flex-wrap gap-2 text-xs text-slate-500">
-          <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-medium shadow-sm ${conditionMeta.className}`}>
+          <span
+            className={`inline-flex items-center rounded-full px-2.5 py-0.5 font-medium shadow-sm ${conditionMeta.className}`}
+          >
             {conditionMeta.label}
           </span>
           <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2.5 py-0.5 font-medium text-slate-600">
@@ -160,10 +162,10 @@ function MarketplaceCard({
 function ResourceCard({ resource, onClick }: { resource: StudyResource; onClick: (item: StudyResource) => void }) {
   const meta = RESOURCE_TYPE_META[resource.type] ||
     RESOURCE_TYPE_META.OTHER || {
-    className: "bg-gray-50 text-gray-600",
-    badgeClass: "bg-gray-100 text-gray-700",
-    icon: <BookOpen className="h-5 w-5" />,
-  }
+      className: "bg-gray-50 text-gray-600",
+      badgeClass: "bg-gray-100 text-gray-700",
+      icon: <BookOpen className="h-5 w-5" />,
+    }
 
   return (
     <button
@@ -448,10 +450,10 @@ export default function MarketplacePage() {
   const filteredStudyList =
     mainTab === "study" && searchText
       ? studyList.filter(
-        (item) =>
-          (item.title?.toLowerCase() || "").includes(keyword) ||
-          (item.description?.toLowerCase() || "").includes(keyword),
-      )
+          (item) =>
+            (item.title?.toLowerCase() || "").includes(keyword) ||
+            (item.description?.toLowerCase() || "").includes(keyword),
+        )
       : studyList
   const activeMeta = mainTab === "secondhand" ? marketMeta : studyMeta
   const totalPages = calcTotalPages(activeMeta)
@@ -510,15 +512,16 @@ export default function MarketplacePage() {
                     ? "asc"
                     : "desc"
                   : item.key === "createdAt"
-                    ? "desc"
-                    : "desc",
+                  ? "desc"
+                  : "desc",
               page: 1,
             }))
           }
-          className={`rounded-full px-3 py-1 text-xs font-semibold transition ${marketParams.sortBy === item.key
-            ? "bg-slate-900 text-white shadow-sm"
-            : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
-            }`}
+          className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+            marketParams.sortBy === item.key
+              ? "bg-slate-900 text-white shadow-sm"
+              : "bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-50"
+          }`}
         >
           {item.label}
         </button>
@@ -583,8 +586,9 @@ export default function MarketplacePage() {
           type="button"
           onClick={() => go(currentPage - 1)}
           disabled={currentPage <= 1}
-          className={`h-10 rounded-lg px-3 text-sm font-semibold transition ${currentPage <= 1 ? "bg-slate-100 text-slate-400" : "bg-white text-slate-700 hover:bg-blue-50"
-            }`}
+          className={`h-10 rounded-lg px-3 text-sm font-semibold transition ${
+            currentPage <= 1 ? "bg-slate-100 text-slate-400" : "bg-white text-slate-700 hover:bg-blue-50"
+          }`}
         >
           上一页
         </button>
@@ -595,8 +599,9 @@ export default function MarketplacePage() {
           type="button"
           onClick={() => go(currentPage + 1)}
           disabled={currentPage >= totalPages}
-          className={`h-10 rounded-lg px-3 text-sm font-semibold transition ${currentPage >= totalPages ? "bg-slate-100 text-slate-400" : "bg-white text-slate-700 hover:bg-blue-50"
-            }`}
+          className={`h-10 rounded-lg px-3 text-sm font-semibold transition ${
+            currentPage >= totalPages ? "bg-slate-100 text-slate-400" : "bg-white text-slate-700 hover:bg-blue-50"
+          }`}
         >
           下一页
         </button>
@@ -620,10 +625,11 @@ export default function MarketplacePage() {
                     setActiveItem(null)
                     setActiveResource(null)
                   }}
-                  className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${mainTab === tab.key
-                    ? "bg-white text-blue-700 shadow-sm shadow-blue-100"
-                    : "text-slate-600 hover:text-blue-700"
-                    }`}
+                  className={`rounded-lg px-4 py-1.5 text-sm font-semibold transition ${
+                    mainTab === tab.key
+                      ? "bg-white text-blue-700 shadow-sm shadow-blue-100"
+                      : "text-slate-600 hover:text-blue-700"
+                  }`}
                 >
                   {tab.label}
                 </button>
@@ -667,10 +673,11 @@ export default function MarketplacePage() {
                         page: 1,
                       }))
                     }
-                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${marketParams.condition === key
-                      ? `${meta.className} shadow-sm`
-                      : "bg-blue-50 text-slate-600 hover:bg-blue-100"
-                      }`}
+                    className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                      marketParams.condition === key
+                        ? `${meta.className} shadow-sm`
+                        : "bg-blue-50 text-slate-600 hover:bg-blue-100"
+                    }`}
                   >
                     {meta.label}
                   </button>

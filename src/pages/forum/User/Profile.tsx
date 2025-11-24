@@ -9,6 +9,7 @@ import { usePosts } from '@/hooks/usePosts'
 import { useFollowingActivities } from '@/hooks/useActivity'
 import { useToast } from '@/utils/toast-hook'
 import { favoriteApi, draftApi, followApi, pointsApi, uploadApi, userApi, type FavoriteFolder, type Favorite } from '@/api'
+import { UPLOAD_CONFIG } from '@/config/constants'
 import type { Post } from '@/types'
 import type { Draft } from '@/api/content/draft'
 import { useUserFollowers, useUserFollowing } from '@/hooks/useUsers'
@@ -278,14 +279,34 @@ export default function ProfilePage() {
     }
   }
 
+  const validateAvatarFile = (file: File) => {
+    if (!UPLOAD_CONFIG.avatar.allowedTypes.includes(file.type)) {
+      showError('只支持 JPG、PNG、GIF、WebP 格式的头像')
+      return false
+    }
+    if (file.size > UPLOAD_CONFIG.avatar.maxSize) {
+      showError('头像大小不能超过 2MB')
+      return false
+    }
+    return true
+  }
+
   const handleAvatarChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
+    if (!validateAvatarFile(file)) {
+      event.target.value = ''
+      return
+    }
     setIsUploadingAvatar(true)
     try {
       const res = await uploadApi.uploadAvatar(file)
-      setAvatar(res.url)
-      showSuccess('头像已上传')
+      if (!res.url) {
+        showError('上传成功但未返回头像 URL')
+      } else {
+        setAvatar(res.url)
+        showSuccess('头像已上传')
+      }
     } catch {
       showError('头像上传失败，请重试')
     } finally {

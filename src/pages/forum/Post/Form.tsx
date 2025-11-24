@@ -7,6 +7,7 @@ import { useToast } from '@/utils/toast-hook';
 import { useAuthStore } from '@/store/useAuthStore';
 import { LoadingState, RichTextEditor, Button } from '@/components';
 import { draftApi, uploadApi } from '@/api';
+import { UPLOAD_CONFIG } from '@/config/constants';
 import { addActivity } from '@/utils/activity';
 import type { CreatePostRequest } from '@/types';
 
@@ -69,6 +70,18 @@ export default function PostFormPage() {
   if (isEdit && postLoading) {
     return <LoadingState message="加载中..." />;
   }
+
+  const isValidImageFile = (file: File, maxSize: number) => {
+    if (!UPLOAD_CONFIG.image.allowedTypes.includes(file.type)) {
+      showError('只支持 JPG、PNG、GIF、WebP 格式');
+      return false;
+    }
+    if (file.size > maxSize) {
+      showError(`单张图片不能超过 ${Math.round(maxSize / (1024 * 1024))}MB`);
+      return false;
+    }
+    return true;
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -147,6 +160,10 @@ export default function PostFormPage() {
   const handleCoverFile = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
+    if (!isValidImageFile(file, UPLOAD_CONFIG.image.maxSize)) {
+      event.target.value = '';
+      return;
+    }
     setIsUploadingCover(true);
     try {
       const res = await uploadApi.uploadImage(file);
@@ -166,10 +183,18 @@ export default function PostFormPage() {
   };
 
   const handleUploadEditorImage = async (file: File) => {
+    if (!isValidImageFile(file, UPLOAD_CONFIG.image.maxSize)) {
+      return '';
+    }
     try {
       const res = await uploadApi.uploadImage(file);
+      const url = res.url?.trim();
+      if (!url) {
+        showError('上传成功但未返回 URL');
+        return '';
+      }
       showSuccess('图片已上传');
-      return res.url;
+      return url;
     } catch {
       showError('图片上传失败，请重试');
       return '';
