@@ -7,13 +7,11 @@ export default function AnnouncementDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
 
-  const { data, isLoading } = useQuery({
+  const { data: announcement, isLoading } = useQuery({
     queryKey: ['announcement', id],
     queryFn: () => announcementApi.getAnnouncement(id!),
     enabled: !!id,
   });
-
-  const announcement = data?.data;
 
   const getPriorityStyle = (priority: AnnouncementPriority) => {
     switch (priority) {

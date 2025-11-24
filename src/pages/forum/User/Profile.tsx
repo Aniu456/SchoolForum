@@ -31,6 +31,9 @@ export default function ProfilePage() {
   const [followersPage, setFollowersPage] = useState(1)
   const CONNECTIONS_LIMIT = 20 // 每页显示 20 条
 
+  // 关注/粉丝子标签
+  const [connectionsSubTab, setConnectionsSubTab] = useState<'following' | 'followers'>('following')
+
   const { data: followingData, isLoading: followingLoading, refetch: refetchFollowing } = useUserFollowing(currentUser?.id || '', followingPage, CONNECTIONS_LIMIT)
   const { data: followersData, isLoading: followersLoading, refetch: refetchFollowers } = useUserFollowers(currentUser?.id || '', followersPage, CONNECTIONS_LIMIT)
 
@@ -89,10 +92,23 @@ export default function ProfilePage() {
     if (location.pathname === '/connections') return 'connections'
     if (location.pathname === '/activity') return 'activity'
     if (location.pathname === '/points') return 'points'
+    // 检查URL查询参数
+    const params = new URLSearchParams(location.search)
+    const tabParam = params.get('tab')
+    if (tabParam === 'connections') return 'connections'
     return 'posts'
   }
 
   const [activeTab, setActiveTab] = useState<Tab>(getDefaultTab())
+
+  // 根据URL参数设置子标签
+  useEffect(() => {
+    const params = new URLSearchParams(location.search)
+    const subtab = params.get('subtab')
+    if (subtab === 'following' || subtab === 'followers') {
+      setConnectionsSubTab(subtab)
+    }
+  }, [location.search])
 
   // 积分数据查询
   const { data: myPoints } = useQuery({
@@ -553,105 +569,43 @@ export default function ProfilePage() {
       {/* 关注/粉丝 */}
       {activeTab === 'connections' && (
         <div>
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+          {/* 子标签切换 */}
+          <div className="mb-6 flex items-center gap-2 border-b border-gray-200 dark:border-gray-700">
+            <button
+              onClick={() => setConnectionsSubTab('following')}
+              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === 'following'
+                ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                }`}>
+              我的关注 ({currentUser?.followingCount ?? 0})
+            </button>
+            <button
+              onClick={() => setConnectionsSubTab('followers')}
+              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === 'followers'
+                ? 'border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400'
+                : 'text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100'
+                }`}>
+              我的粉丝 ({currentUser?.followerCount ?? 0})
+            </button>
+          </div>
+
+          <div>
             {/* 关注列表 */}
-            <Card className="p-6">
-              <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
-                我的关注 ({currentUser.followingCount ?? 0})
-              </h3>
-              {followingLoading ? (
-                <LoadingState message="加载关注列表..." />
-              ) : (followingData as any)?.data?.length > 0 ? (
-                <>
-                  <div className="space-y-3">
-                    {(followingData as any)?.data?.map((u: any) => (
-                      <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
-                        <div
-                          className="flex flex-1 cursor-pointer items-center gap-3"
-                          onClick={() => navigate(`/users/${u.id}`)}>
-                          <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
-                          <div>
-                            <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
-                            <div className="text-xs text-gray-500 dark:text-gray-400">
-                              关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              handleToggleFollow(u.id, true)
-                            }}>
-                            取消关注
-                          </Button>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                  {/* 分页控件 */}
-                  <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      第 {followingPage} 页，共 {(followingData as any)?.meta?.totalPages || 1} 页
-                    </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={followingPage === 1}
-                        onClick={() => setFollowingPage(p => Math.max(1, p - 1))}>
-                        上一页
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={followingPage >= ((followingData as any)?.meta?.totalPages || 1)}
-                        onClick={() => setFollowingPage(p => p + 1)}>
-                        下一页
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              ) : (
-                <EmptyState
-                  title="暂无关注"
-                  description="快去关注感兴趣的用户吧！"
-                  icon="👥"
-                />
-              )}
-            </Card>
-
-            {/* 粉丝列表 */}
-            <Card className="p-6">
-              <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">
-                我的粉丝 ({currentUser.followerCount ?? 0})
-              </h3>
-              {followersLoading ? (
-                <LoadingState message="加载粉丝列表..." />
-              ) : (followersData as any)?.data?.length > 0 ? (
-                <>
-                  <div className="space-y-3">
-                    {(followersData as any)?.data?.map((u: any) => {
-                      // 检查是否互相关注
-                      const isFollowingBack = followingStates[u.id] ?? ((followingData as any)?.data?.some((f: any) => f.id === u.id) || false)
-
-                      return (
+            {connectionsSubTab === 'following' && (
+              <Card className="p-6">
+                {followingLoading ? (
+                  <LoadingState message="加载关注列表..." />
+                ) : (followingData as any)?.data?.length > 0 ? (
+                  <>
+                    <div className="space-y-3">
+                      {(followingData as any)?.data?.map((u: any) => (
                         <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
                           <div
                             className="flex flex-1 cursor-pointer items-center gap-3"
                             onClick={() => navigate(`/users/${u.id}`)}>
                             <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
                             <div>
-                              <div className="flex items-center gap-2">
-                                <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
-                                {isFollowingBack && (
-                                  <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                                    互相关注
-                                  </span>
-                                )}
-                              </div>
+                              <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
                               <div className="text-xs text-gray-500 dark:text-gray-400">
                                 关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
                               </div>
@@ -660,49 +614,129 @@ export default function ProfilePage() {
                           <div className="flex gap-2">
                             <Button
                               size="sm"
-                              variant={isFollowingBack ? "outline" : "primary"}
+                              variant="outline"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                handleToggleFollow(u.id, isFollowingBack)
+                                handleToggleFollow(u.id, true)
                               }}>
-                              {isFollowingBack ? '已关注' : '关注'}
+                              取消关注
                             </Button>
                           </div>
                         </div>
-                      )
-                    })}
-                  </div>
-                  {/* 分页控件 */}
-                  <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
-                    <div className="text-sm text-gray-600 dark:text-gray-400">
-                      第 {followersPage} 页，共 {(followersData as any)?.meta?.totalPages || 1} 页
+                      ))}
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={followersPage === 1}
-                        onClick={() => setFollowersPage(p => Math.max(1, p - 1))}>
-                        上一页
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={followersPage >= ((followersData as any)?.meta?.totalPages || 1)}
-                        onClick={() => setFollowersPage(p => p + 1)}>
-                        下一页
-                      </Button>
+                    {/* 分页控件 */}
+                    <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        第 {followingPage} 页，共 {(followingData as any)?.meta?.totalPages || 1} 页
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={followingPage === 1}
+                          onClick={() => setFollowingPage(p => Math.max(1, p - 1))}>
+                          上一页
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={followingPage >= ((followingData as any)?.meta?.totalPages || 1)}
+                          onClick={() => setFollowingPage(p => p + 1)}>
+                          下一页
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </>
-              ) : (
-                <EmptyState
-                  title="暂无粉丝"
-                  description="发布优质内容吸引粉丝关注吧！"
-                  icon="⭐"
-                />
-              )}
-            </Card>
+                  </>
+                ) : (
+                  <EmptyState
+                    title="暂无关注"
+                    description="快去关注感兴趣的用户吧！"
+                    icon="👥"
+                  />
+                )}
+              </Card>
+            )}
+
+            {/* 粉丝列表 */}
+            {connectionsSubTab === 'followers' && (
+              <Card className="p-6">
+                {followersLoading ? (
+                  <LoadingState message="加载粉丝列表..." />
+                ) : (followersData as any)?.data?.length > 0 ? (
+                  <>
+                    <div className="space-y-3">
+                      {(followersData as any)?.data?.map((u: any) => {
+                        // 检查是否互相关注
+                        const isFollowingBack = followingStates[u.id] ?? ((followingData as any)?.data?.some((f: any) => f.id === u.id) || false)
+
+                        return (
+                          <div key={u.id} className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800">
+                            <div
+                              className="flex flex-1 cursor-pointer items-center gap-3"
+                              onClick={() => navigate(`/users/${u.id}`)}>
+                              <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <div className="font-semibold text-gray-900 dark:text-gray-100">{u.nickname || u.username}</div>
+                                  {isFollowingBack && (
+                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
+                                      互相关注
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">
+                                  关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant={isFollowingBack ? "outline" : "primary"}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  handleToggleFollow(u.id, isFollowingBack)
+                                }}>
+                                {isFollowingBack ? '已关注' : '关注'}
+                              </Button>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                    {/* 分页控件 */}
+                    <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
+                      <div className="text-sm text-gray-600 dark:text-gray-400">
+                        第 {followersPage} 页，共 {(followersData as any)?.meta?.totalPages || 1} 页
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={followersPage === 1}
+                          onClick={() => setFollowersPage(p => Math.max(1, p - 1))}>
+                          上一页
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={followersPage >= ((followersData as any)?.meta?.totalPages || 1)}
+                          onClick={() => setFollowersPage(p => p + 1)}>
+                          下一页
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <EmptyState
+                    title="暂无粉丝"
+                    description="发布优质内容吸引粉丝关注吧！"
+                    icon="⭐"
+                  />
+                )}
+              </Card>
+            )}
           </div>
         </div>
       )}

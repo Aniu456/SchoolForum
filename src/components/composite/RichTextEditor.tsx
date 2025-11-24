@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -35,6 +35,8 @@ export default function RichTextEditor({
         openOnClick: false,
         HTMLAttributes: {
           class: 'text-blue-600 underline',
+          target: '_blank',
+          rel: 'noopener noreferrer',
         },
       }),
     ],
@@ -50,6 +52,28 @@ export default function RichTextEditor({
     },
     immediatelyRender: false,
   });
+
+  // 当外部 content 变化时，同步到编辑器
+  useEffect(() => {
+    if (!editor) return;
+
+    const current = editor.getHTML();
+
+    // 处理清空内容的情况
+    if (!content) {
+      if (current !== '' && current !== '<p></p>') {
+        editor.commands.clearContent(true);
+      }
+      return;
+    }
+
+    // 外部传入内容与编辑器不一致时才同步，避免死循环
+    if (content !== current) {
+      // Tiptap 的 setContent 第二个参数为 SetContentOptions
+      // 这里通过 emitUpdate: false 避免再次触发 onUpdate
+      editor.commands.setContent(content, { emitUpdate: false });
+    }
+  }, [content, editor]);
 
   if (!editor) {
     return null;
@@ -100,7 +124,13 @@ export default function RichTextEditor({
       return;
     }
 
-    editor.chain().focus().extendMarkRange('link').setLink({ href: url }).run();
+    // 规范化链接：如果用户没有输入协议，自动补全为 https://
+    let finalUrl = url.trim();
+    if (finalUrl && !/^[a-zA-Z][a-zA-Z0-9+.+-]*:/.test(finalUrl)) {
+      finalUrl = `https://${finalUrl}`;
+    }
+
+    editor.chain().focus().extendMarkRange('link').setLink({ href: finalUrl }).run();
   };
 
   return (
@@ -111,11 +141,10 @@ export default function RichTextEditor({
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           disabled={!editor.can().chain().focus().toggleBold().run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('bold')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('bold')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="粗体"
         >
           <strong>B</strong>
@@ -123,11 +152,10 @@ export default function RichTextEditor({
         <button
           onClick={() => editor.chain().focus().toggleItalic().run()}
           disabled={!editor.can().chain().focus().toggleItalic().run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('italic')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('italic')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="斜体"
         >
           <em>I</em>
@@ -135,11 +163,10 @@ export default function RichTextEditor({
         <button
           onClick={() => editor.chain().focus().toggleStrike().run()}
           disabled={!editor.can().chain().focus().toggleStrike().run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('strike')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('strike')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="删除线"
         >
           <s>S</s>
@@ -150,33 +177,30 @@ export default function RichTextEditor({
         {/* 标题 */}
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('heading', { level: 1 })
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('heading', { level: 1 })
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="标题 1"
         >
           H1
         </button>
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('heading', { level: 2 })
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('heading', { level: 2 })
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="标题 2"
         >
           H2
         </button>
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('heading', { level: 3 })
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('heading', { level: 3 })
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="标题 3"
         >
           H3
@@ -187,22 +211,20 @@ export default function RichTextEditor({
         {/* 列表 */}
         <button
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('bulletList')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('bulletList')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="无序列表"
         >
           •
         </button>
         <button
           onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('orderedList')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('orderedList')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="有序列表"
         >
           1.
@@ -213,11 +235,10 @@ export default function RichTextEditor({
         {/* 引用 */}
         <button
           onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('blockquote')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('blockquote')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="引用"
         >
           "
@@ -228,11 +249,10 @@ export default function RichTextEditor({
         {/* 链接和图片 */}
         <button
           onClick={setLink}
-          className={`rounded px-2 py-1 text-sm ${
-            editor.isActive('link')
-              ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-              : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
-          }`}
+          className={`rounded px-2 py-1 text-sm ${editor.isActive('link')
+            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
+            : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+            }`}
           title="链接"
         >
           🔗

@@ -40,6 +40,7 @@ export interface CommentQueryParams {
   page?: number; // 默认 1
   limit?: number; // 默认 20
   sortBy?: 'createdAt' | 'likeCount'; // 默认 createdAt
+  previewLimit?: number;
 }
 
 /**

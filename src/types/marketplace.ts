@@ -19,6 +19,9 @@ export type ItemCategory =
 // 商品成色
 export type ItemCondition = 'NEW' | 'LIKE_NEW' | 'GOOD' | 'FAIR' | 'POOR';
 
+// 交易方式
+export type TradeMethod = 'MEET' | 'DELIVERY' | 'BOTH';
+
 /**
  * 二手商品
  */
@@ -27,8 +30,10 @@ export interface MarketplaceItem {
   title: string;
   description: string;
   price: number;
+  originalPrice?: number;
   category: ItemCategory;
   condition: ItemCondition;
+  tradeMethod?: TradeMethod;
   images: string[];
   location?: string;
   contact: string;

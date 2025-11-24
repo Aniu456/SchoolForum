@@ -58,5 +58,5 @@ export const studyResourceApi = {
     api.delete(`/study-resources/${id}`),
 
   download: (id: string) =>
-    api.post(`/study-resources/${id}/download`),
+    api.post<StudyResource>(`/study-resources/${id}/download`),
 };

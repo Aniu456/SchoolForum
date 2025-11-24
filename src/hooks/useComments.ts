@@ -1,12 +1,22 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { commentApi, postApi, likeApi } from '@/api';
-import type { Comment, CreateCommentRequest } from '@/types';
+import type { CreateCommentRequest } from '@/types';
 
 // 获取帖子的评论列表 - 使用 postApi.getPostComments
-export const useComments = (postId: string) => {
+export const useComments = (
+  postId: string,
+  options?: { page?: number; limit?: number; sortBy?: 'createdAt' | 'likeCount'; previewLimit?: number },
+) => {
+  const params = {
+    page: options?.page ?? 1,
+    limit: options?.limit ?? 20,
+    sortBy: options?.sortBy ?? 'createdAt',
+    previewLimit: options?.previewLimit ?? 3,
+  };
+
   return useQuery({
-    queryKey: ['comments', postId],
-    queryFn: () => postApi.getPostComments(postId),
+    queryKey: ['comments', postId, params],
+    queryFn: () => postApi.getPostComments(postId, params),
     enabled: !!postId,
     staleTime: 1000 * 60 * 2, // 2分钟内数据视为新鲜
   });

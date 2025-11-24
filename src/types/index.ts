@@ -98,6 +98,7 @@ export interface Comment {
   likeCount: number;
   replyCount?: number;
   replies?: Comment[]; // 嵌套回复
+  hasMoreReplies?: boolean;
   createdAt: string;
   updatedAt: string;
   // 前端状态

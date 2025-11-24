@@ -19,6 +19,7 @@ const MarketplaceFormPage = lazy(() => import('@/pages/Services/Marketplace/Form
 // Study Resource views
 const StudyResourcesPage = lazy(() => import('@/pages/Services/StudyResources'))
 const StudyResourceDetailPage = lazy(() => import('@/pages/Services/StudyResources/Detail'))
+const StudyResourceFormPage = lazy(() => import('@/pages/Services/StudyResources/Form'))
 
 // Category views removed: API.md 不提供分类接口，已移除所有分类相关功能
 
@@ -169,8 +170,16 @@ export const routes: RouteObject[] = [
         element: <StudyResourcesPage />,
       },
       {
+        path: 'new',
+        element: <StudyResourceFormPage />,
+      },
+      {
         path: ':id',
         element: <StudyResourceDetailPage />,
+      },
+      {
+        path: ':id/edit',
+        element: <StudyResourceFormPage />,
       },
     ],
   },

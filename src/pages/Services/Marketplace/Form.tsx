@@ -7,6 +7,7 @@ import { useCreateMarketplaceItem } from '@/hooks/useMarketplace'
 import { useAuthStore } from '@/store/useAuthStore'
 import { useToast } from '@/utils/toast-hook'
 import type { ItemCategory, ItemCondition, CreateMarketplaceItemRequest } from '@/types'
+import { uploadApi } from '@/api'
 
 const CATEGORY_OPTIONS: { value: ItemCategory; label: string }[] = [
     { value: 'ELECTRONICS', label: '电子产品' },
@@ -42,6 +43,34 @@ export default function MarketplaceFormPage() {
     const [location, setLocation] = useState('')
     const [contact, setContact] = useState('')
     const [imageUrls, setImageUrls] = useState('')
+    const [uploading, setUploading] = useState(false)
+
+    const normalizedUrls = (value: string) =>
+        value
+            .split(/\n|,/)
+            .map((url) => url.trim())
+            .filter((url) => url)
+
+    const handleUploadFiles = async (fileList: FileList | null) => {
+        if (!fileList || fileList.length === 0) return
+        const files = Array.from(fileList)
+        setUploading(true)
+        try {
+            const res = await uploadApi.uploadImages(files)
+            const urls = res?.urls || []
+            if (!urls.length) {
+                showError('上传失败，请重试')
+                return
+            }
+            const merged = Array.from(new Set([...normalizedUrls(imageUrls), ...urls]))
+            setImageUrls(merged.join('\n'))
+            showSuccess(`已上传 ${urls.length} 张图片`)
+        } catch {
+            showError('上传失败，请稍后再试')
+        } finally {
+            setUploading(false)
+        }
+    }
 
     if (!user) {
         navigate('/login')
@@ -72,10 +101,7 @@ export default function MarketplaceFormPage() {
             return
         }
 
-        const images = imageUrls
-            .split(/\n|,/)
-            .map((url) => url.trim())
-            .filter((url) => url)
+        const images = normalizedUrls(imageUrls)
 
         if (images.length === 0) {
             showError('请至少上传一张图片（填写图片 URL）')
@@ -201,6 +227,31 @@ export default function MarketplaceFormPage() {
                         rows={3}
                         placeholder="https://example.com/image1.jpg"
                     />
+                    <div className="mt-3 flex flex-wrap items-center gap-3 rounded-lg bg-gray-50 p-3 text-sm text-gray-700 dark:bg-gray-800/50 dark:text-gray-200">
+                        <div>
+                            <p className="font-medium">本地上传</p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400">选择图片自动上传并填充 URL</p>
+                        </div>
+                        <label className="flex cursor-pointer items-center gap-2 rounded-lg bg-white px-3 py-2 text-sm font-semibold text-blue-600 shadow-sm ring-1 ring-blue-100 transition hover:bg-blue-50 dark:bg-gray-900 dark:text-blue-300 dark:ring-blue-900/60">
+                            选择文件
+                            <input
+                                type="file"
+                                accept="image/*"
+                                multiple
+                                className="hidden"
+                                onChange={(e) => {
+                                    void handleUploadFiles(e.target.files)
+                                    e.target.value = ''
+                                }}
+                            />
+                        </label>
+                        {uploading && <span className="text-xs text-blue-600">正在上传...</span>}
+                        {!uploading && normalizedUrls(imageUrls).length > 0 && (
+                            <span className="text-xs text-gray-500">
+                                已添加 {normalizedUrls(imageUrls).length} 张图片
+                            </span>
+                        )}
+                    </div>
                 </div>
 
                 <div className="mt-6 flex justify-end gap-3 border-t border-gray-200 pt-6 dark:border-gray-800">
