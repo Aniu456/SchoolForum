@@ -1,17 +1,9 @@
 "use client"
 
-import {
-  draftApi,
-  favoriteApi,
-  followApi,
-  pointsApi,
-  uploadApi,
-  userApi,
-  type Favorite,
-  type FavoriteFolder,
-} from "@/api"
-import type { Draft } from "@/api/content/draft"
-import { Avatar, Button, Card, EmptyState, LoadingState, PostCard } from "@/components"
+import { favoriteApi, followApi, uploadApi, userApi, type Favorite } from "@/api"
+
+import { Avatar, Button, Card, EmptyState, LoadingState } from "@/components"
+import ProfileTabsContent from "@/components/composite/ProfileTabsContent"
 import { UPLOAD_CONFIG } from "@/config/constants"
 import { useFollowingActivities } from "@/hooks/useActivity"
 import { usePosts } from "@/hooks/usePosts"
@@ -20,11 +12,11 @@ import { useAuthStore } from "@/store/useAuthStore"
 import type { Post } from "@/types"
 import { formatTime } from "@/utils/format"
 import { useToast } from "@/utils/toast-hook"
-import { useQuery, useQueryClient } from "@tanstack/react-query"
+import { useQueryClient } from "@tanstack/react-query"
 import { useEffect, useRef, useState } from "react"
 import { Link, useLocation, useNavigate } from "react-router-dom"
 
-type Tab = "posts" | "favorites" | "drafts" | "connections" | "activity" | "points" | "settings"
+type Tab = "posts" | "favorites" | "connections" | "activity" | "settings"
 
 export default function ProfilePage() {
   const location = useLocation()
@@ -78,12 +70,12 @@ export default function ProfilePage() {
     activityType === "all"
       ? allActivities
       : allActivities.filter((activity: any) => {
-        if (activityType === "posts") return activity.type === "POST"
-        if (activityType === "comments") return activity.type === "COMMENT"
-        if (activityType === "likes") return activity.type === "LIKE"
-        if (activityType === "favorites") return activity.type === "FAVORITE"
-        return true
-      })
+          if (activityType === "posts") return activity.type === "POST"
+          if (activityType === "comments") return activity.type === "COMMENT"
+          if (activityType === "likes") return activity.type === "LIKE"
+          if (activityType === "favorites") return activity.type === "FAVORITE"
+          return true
+        })
 
   // 排序逻辑
   const activities = [...filteredActivities].sort((a: any, b: any) => {
@@ -92,28 +84,19 @@ export default function ProfilePage() {
     return activitySortDesc ? timeB - timeA : timeA - timeB
   })
 
-  // 收藏夹状态
-  const [favoriteFolders, setFavoriteFolders] = useState<FavoriteFolder[]>([])
-  const [selectedFolder, setSelectedFolder] = useState<string | null>(null)
-  const [folderPosts, setFolderPosts] = useState<Favorite[]>([])
+  // 收藏状态
+  const [favorites, setFavorites] = useState<Favorite[]>([])
   const [isFavoritesLoading, setIsFavoritesLoading] = useState(false)
+  const [favoritesPage, setFavoritesPage] = useState(1)
 
-  // 草稿状态
-  const [drafts, setDrafts] = useState<Draft[]>([])
-  const [isDraftsLoading, setIsDraftsLoading] = useState(false)
-
-  // 积分相关状态
-  const [pointsTab, setPointsTab] = useState<"overview" | "history" | "leaderboard">("overview")
-  const [historyPage, setHistoryPage] = useState(1)
+  // 积分相关状态 - Removed
+  // const [pointsTab, setPointsTab] = useState<"overview" | "history" | "leaderboard">("overview")
+  // const [historyPage, setHistoryPage] = useState(1)
 
   // 根据路由确定默认 tab
   const getDefaultTab = (): Tab => {
     if (location.pathname === "/settings") return "settings"
     if (location.pathname === "/favorites") return "favorites"
-    if (location.pathname === "/drafts") return "drafts"
-    if (location.pathname === "/connections") return "connections"
-    if (location.pathname === "/activity") return "activity"
-    if (location.pathname === "/points") return "points"
     // 检查URL查询参数
     const params = new URLSearchParams(location.search)
     const tabParam = params.get("tab")
@@ -132,26 +115,7 @@ export default function ProfilePage() {
     }
   }, [location.search])
 
-  // 积分数据查询
-  const { data: myPoints } = useQuery({
-    queryKey: ["points", "me"],
-    queryFn: () => pointsApi.getMyPoints(),
-    enabled: activeTab === "points",
-  })
-
-  const { data: pointsHistory } = useQuery({
-    queryKey: ["points", "history", historyPage],
-    queryFn: () => pointsApi.getHistory({ page: historyPage, limit: 20 }),
-    enabled: activeTab === "points" && pointsTab === "history",
-  })
-
-  const { data: leaderboard } = useQuery({
-    queryKey: ["points", "leaderboard"],
-    queryFn: () => pointsApi.getLeaderboard(50),
-    enabled: activeTab === "points" && pointsTab === "leaderboard",
-  })
-
-  const points = myPoints
+  /* Points queries removed */
 
   // 设置表单状态
   const [username, setUsername] = useState(currentUser?.username || "")
@@ -162,28 +126,21 @@ export default function ProfilePage() {
   const [isSaving, setIsSaving] = useState(false)
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false)
 
-  // 加载收藏夹列表
-  const loadFavoriteFolders = async () => {
+  // 加载收藏列表
+  const loadFavorites = async () => {
     setIsFavoritesLoading(true)
     try {
-      const response = await favoriteApi.getFolders()
-      setFavoriteFolders(response.data || [])
-    } catch {
-      showError("加载收藏夹失败")
-      setFavoriteFolders([])
-    } finally {
-      setIsFavoritesLoading(false)
-    }
-  }
-
-  // 加载指定收藏夹的帖子
-  const loadFolderPosts = async (folderId: string) => {
-    try {
-      const response = await favoriteApi.getFolderPosts(folderId)
-      setFolderPosts(response.data || [])
+      const response = await favoriteApi.getFavorites(favoritesPage, 20)
+      if (favoritesPage === 1) {
+        setFavorites(response.data || [])
+      } else {
+        setFavorites((prev) => [...prev, ...(response.data || [])])
+      }
     } catch {
       showError("加载收藏失败")
-      setFolderPosts([])
+      setFavorites([])
+    } finally {
+      setIsFavoritesLoading(false)
     }
   }
 
@@ -241,26 +198,15 @@ export default function ProfilePage() {
     }
   }
 
-  // 加载草稿列表
-  const loadDrafts = async () => {
-    setIsDraftsLoading(true)
-    try {
-      const response = await draftApi.getList({ page: 1, limit: 50 })
-      setDrafts(response.data || [])
-    } catch {
-      showError("加载草稿失败")
-      setDrafts([])
-    } finally {
-      setIsDraftsLoading(false)
-    }
-  }
+  /* Drafts loading removed - drafts are local only now */
 
-  // 页面加载时获取收藏夹和草稿数据
+  // 页面加载时获取收藏数据
   useEffect(() => {
-    loadFavoriteFolders()
-    loadDrafts()
+    if (activeTab === "favorites") {
+      loadFavorites()
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, [activeTab, favoritesPage])
 
   if (!currentUser) {
     navigate("/login")
@@ -385,400 +331,58 @@ export default function ProfilePage() {
       </Card>
 
       {/* Tab 切换 */}
-      <div className="mb-6 flex gap-4 border-b border-gray-200 dark:border-gray-700">
-        <Button
-          onClick={() => handleTabChange("posts")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "posts"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          我的帖子 ({userPosts.length})
-        </Button>
-        <Button
-          onClick={() => handleTabChange("favorites")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "favorites"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          收藏夹 ({favoriteFolders.length})
-        </Button>
-        <Button
-          onClick={() => handleTabChange("drafts")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "drafts"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          草稿 ({drafts.length})
-        </Button>
-        <Button
-          onClick={() => handleTabChange("connections")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "connections"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          关注/粉丝
-        </Button>
-        <Button
-          onClick={() => handleTabChange("activity")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "activity"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          动态
-        </Button>
-        <Button
-          onClick={() => handleTabChange("points")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "points"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          积分等级
-        </Button>
-        <Button
-          onClick={() => handleTabChange("settings")}
-          variant="ghost"
-          className={`pb-4 text-lg font-medium ${activeTab === "settings"
-              ? "border-b-2 border-blue-500 text-blue-600 dark:text-blue-400"
-              : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-200"
-            }`}
-        >
-          设置
-        </Button>
+      <div className="mb-6 overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
+        <div className="flex items-center justify-between gap-4 px-6 py-3">
+          <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
+            {[
+              { key: "posts" as Tab, label: "我的帖子" },
+              { key: "favorites" as Tab, label: "收藏" },
+              { key: "activity" as Tab, label: "动态" },
+              { key: "settings" as Tab, label: "设置" },
+            ].map((tab) => (
+              <button
+                key={tab.label}
+                type="button"
+                onClick={() => handleTabChange(tab.key)}
+                className={`relative px-1 py-3 text-sm font-medium transition-colors ${
+                  activeTab === tab.key
+                    ? "text-blue-600 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-blue-600 after:rounded-full"
+                    : "text-gray-500 hover:text-gray-900"
+                }`}
+              >
+                {tab.label}
+                {tab.key === "posts" && <span className="ml-1 text-xs text-gray-400">({userPosts.length})</span>}
+                {tab.key === "favorites" && <span className="ml-1 text-xs text-gray-400">({favorites.length})</span>}
+              </button>
+            ))}
+          </div>
+        </div>
       </div>
 
-      {/* 我的帖子 */}
-      {activeTab === "posts" && (
-        <div>
-          <div className="space-y-4">
-            {userPosts.length > 0 ? (
-              userPosts.map((post: Post) => <PostCard key={post.id} post={post} />)
-            ) : (
-              <EmptyState
-                title="还没有发布过帖子"
-                description="快去发布你的第一篇帖子吧！"
-                icon="📝"
-                action={{
-                  label: "去发帖",
-                  onClick: () => navigate("/posts/new"),
-                }}
-              />
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 收藏夹 */}
-      {activeTab === "favorites" && (
-        <div>
-          {isFavoritesLoading ? (
-            <LoadingState message="加载收藏夹..." />
-          ) : favoriteFolders.length > 0 ? (
-            <div className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-                {favoriteFolders.map((folder) => (
-                  <Card
-                    key={folder.id}
-                    className="cursor-pointer p-4 transition-shadow hover:shadow-lg"
-                    onClick={() => {
-                      setSelectedFolder(folder.id)
-                      loadFolderPosts(folder.id)
-                    }}
-                  >
-                    <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">{folder.name}</h3>
-                    {folder.description && (
-                      <p className="mb-2 text-sm text-gray-600 dark:text-gray-400">{folder.description}</p>
-                    )}
-                    <p className="text-sm text-gray-500 dark:text-gray-500">{folder.favoriteCount} 个收藏</p>
-                  </Card>
-                ))}
-              </div>
-
-              {/* 显示选中收藏夹的帖子 */}
-              {selectedFolder && folderPosts.length > 0 && (
-                <div className="mt-6 space-y-4">
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">收藏的帖子</h3>
-                  {folderPosts.map((favorite) => favorite.post && <PostCard key={favorite.id} post={favorite.post} />)}
-                </div>
-              )}
-            </div>
-          ) : (
-            <EmptyState title="还没有收藏夹" description="创建收藏夹来整理你喜欢的内容吧！" icon="⭐" />
-          )}
-        </div>
-      )}
-
-      {/* 草稿 */}
-      {activeTab === "drafts" && (
-        <div>
-          {isDraftsLoading ? (
-            <LoadingState message="加载草稿..." />
-          ) : drafts.length > 0 ? (
-            <div className="space-y-4">
-              {drafts.map((draft) => (
-                <Card key={draft.id} className="p-6">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <h3 className="mb-2 text-lg font-semibold text-gray-900 dark:text-gray-100">
-                        {draft.title || "无标题草稿"}
-                      </h3>
-                      {draft.content && (
-                        <p className="mb-3 line-clamp-2 text-gray-600 dark:text-gray-400">
-                          {draft.content.replace(/<[^>]*>/g, "").substring(0, 100)}...
-                        </p>
-                      )}
-                      {draft.tags && draft.tags.length > 0 && (
-                        <div className="mb-3 flex flex-wrap gap-2">
-                          {draft.tags.map((tag) => (
-                            <span
-                              key={tag}
-                              className="rounded-full bg-gray-100 px-3 py-1 text-xs text-gray-600 dark:bg-gray-800 dark:text-gray-400"
-                            >
-                              #{tag}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-                      <div className="text-sm text-gray-500 dark:text-gray-500">
-                        最后编辑：{formatTime(draft.updatedAt)}
-                      </div>
-                    </div>
-                    <div className="ml-4 flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => navigate(`/posts/new?draft=${draft.id}`)}>
-                        继续编辑
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          try {
-                            await draftApi.delete(draft.id)
-                            showSuccess("草稿已删除")
-                            loadDrafts()
-                          } catch {
-                            showError("删除失败")
-                          }
-                        }}
-                      >
-                        删除
-                      </Button>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              title="暂无草稿"
-              description="开始写作，系统会自动保存您的草稿"
-              icon="📝"
-              action={{
-                label: "去发帖",
-                onClick: () => navigate("/posts/new"),
-              }}
-            />
-          )}
-        </div>
-      )}
-      {/* 关注/粉丝 */}
-      {activeTab === "connections" && (
-        <div>
-          {/* 子标签切换 */}
-          <div className="mb-6 flex items-center gap-2 border-b border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => setConnectionsSubTab("following")}
-              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === "following"
-                  ? "border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                }`}
-            >
-              我的关注 ({currentUser?.followingCount ?? 0})
-            </button>
-            <button
-              onClick={() => setConnectionsSubTab("followers")}
-              className={`px-4 py-2 text-sm font-medium transition ${connectionsSubTab === "followers"
-                  ? "border-b-2 border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                }`}
-            >
-              我的粉丝 ({currentUser?.followerCount ?? 0})
-            </button>
-          </div>
-
-          <div>
-            {/* 关注列表 */}
-            {connectionsSubTab === "following" && (
-              <Card className="p-6">
-                {followingLoading ? (
-                  <LoadingState message="加载关注列表..." />
-                ) : (followingData as any)?.data?.length > 0 ? (
-                  <>
-                    <div className="space-y-3">
-                      {(followingData as any)?.data?.map((u: any) => (
-                        <div
-                          key={u.id}
-                          className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800"
-                        >
-                          <div
-                            className="flex flex-1 cursor-pointer items-center gap-3"
-                            onClick={() => navigate(`/users/${u.id}`)}
-                          >
-                            <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
-                            <div>
-                              <div className="font-semibold text-gray-900 dark:text-gray-100">
-                                {u.nickname || u.username}
-                              </div>
-                              <div className="text-xs text-gray-500 dark:text-gray-400">
-                                关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
-                              </div>
-                            </div>
-                          </div>
-                          <div className="flex gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleToggleFollow(u.id, true)
-                              }}
-                            >
-                              取消关注
-                            </Button>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                    {/* 分页控件 */}
-                    <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        第 {followingPage} 页，共 {(followingData as any)?.meta?.totalPages || 1} 页
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={followingPage === 1}
-                          onClick={() => setFollowingPage((p) => Math.max(1, p - 1))}
-                        >
-                          上一页
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={followingPage >= ((followingData as any)?.meta?.totalPages || 1)}
-                          onClick={() => setFollowingPage((p) => p + 1)}
-                        >
-                          下一页
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <EmptyState title="暂无关注" description="快去关注感兴趣的用户吧！" icon="👥" />
-                )}
-              </Card>
-            )}
-
-            {/* 粉丝列表 */}
-            {connectionsSubTab === "followers" && (
-              <Card className="p-6">
-                {followersLoading ? (
-                  <LoadingState message="加载粉丝列表..." />
-                ) : (followersData as any)?.data?.length > 0 ? (
-                  <>
-                    <div className="space-y-3">
-                      {(followersData as any)?.data?.map((u: any) => {
-                        // 检查是否互相关注
-                        const isFollowingBack =
-                          followingStates[u.id] ??
-                          ((followingData as any)?.data?.some((f: any) => f.id === u.id) || false)
-
-                        return (
-                          <div
-                            key={u.id}
-                            className="flex items-center justify-between rounded-lg border border-gray-100 p-3 dark:border-gray-800"
-                          >
-                            <div
-                              className="flex flex-1 cursor-pointer items-center gap-3"
-                              onClick={() => navigate(`/users/${u.id}`)}
-                            >
-                              <Avatar src={u.avatar} alt={u.username} username={u.username} size={40} seed={u.id} />
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <div className="font-semibold text-gray-900 dark:text-gray-100">
-                                    {u.nickname || u.username}
-                                  </div>
-                                  {isFollowingBack && (
-                                    <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-                                      互相关注
-                                    </span>
-                                  )}
-                                </div>
-                                <div className="text-xs text-gray-500 dark:text-gray-400">
-                                  关注 {u.followingCount ?? 0} · 粉丝 {u.followerCount ?? 0}
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant={isFollowingBack ? "outline" : "primary"}
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  handleToggleFollow(u.id, isFollowingBack)
-                                }}
-                              >
-                                {isFollowingBack ? "已关注" : "关注"}
-                              </Button>
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                    {/* 分页控件 */}
-                    <div className="mt-4 flex items-center justify-between border-t pt-4 dark:border-gray-700">
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        第 {followersPage} 页，共 {(followersData as any)?.meta?.totalPages || 1} 页
-                      </div>
-                      <div className="flex gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={followersPage === 1}
-                          onClick={() => setFollowersPage((p) => Math.max(1, p - 1))}
-                        >
-                          上一页
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          disabled={followersPage >= ((followersData as any)?.meta?.totalPages || 1)}
-                          onClick={() => setFollowersPage((p) => p + 1)}
-                        >
-                          下一页
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <EmptyState title="暂无粉丝" description="发布优质内容吸引粉丝关注吧！" icon="⭐" />
-                )}
-              </Card>
-            )}
-          </div>
-        </div>
-      )}
+      <ProfileTabsContent
+        activeTab={activeTab}
+        currentUser={currentUser}
+        userPosts={userPosts}
+        favorites={favorites}
+        isFavoritesLoading={isFavoritesLoading}
+        favoritesPage={favoritesPage}
+        setFavoritesPage={setFavoritesPage}
+        connectionsSubTab={connectionsSubTab}
+        setConnectionsSubTab={setConnectionsSubTab}
+        followingData={followingData}
+        followingLoading={followingLoading}
+        followingPage={followingPage}
+        setFollowingPage={setFollowingPage}
+        followersData={followersData}
+        followersLoading={followersLoading}
+        followersPage={followersPage}
+        setFollowersPage={setFollowersPage}
+        followingStates={followingStates}
+        _handleToggleFollow={handleToggleFollow}
+        navigate={navigate}
+        _refetchFollowing={refetchFollowing}
+        _refetchFollowers={refetchFollowers}
+      />
 
       {/* 动态 */}
       {activeTab === "activity" && (
@@ -1008,240 +612,6 @@ export default function ProfilePage() {
             </div>
           ) : (
             <EmptyState title="暂无动态" description="关注用户后，这里将展示他们的新帖子和你收到的评论" icon="📊" />
-          )}
-        </div>
-      )}
-
-      {/* 积分等级 */}
-      {activeTab === "points" && (
-        <div className="space-y-6">
-          {/* 我的积分卡片 */}
-          <Card className="bg-gradient-to-br from-blue-500 to-purple-600 p-6 text-white">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="mb-2 text-3xl font-bold">我的积分</h2>
-                <div className="flex items-baseline gap-2">
-                  <span className="text-5xl font-bold">{points?.totalPoints || 0}</span>
-                  <span className="text-xl opacity-90">分</span>
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="mb-2 text-sm opacity-90">当前等级</div>
-                <div className="flex items-center gap-2">
-                  <span className="text-4xl font-bold">Lv.{points?.level || 0}</span>
-                </div>
-                <div className="mt-2 text-sm opacity-90">
-                  距离下一级还需 {(points?.nextLevelPoints || 0) - (points?.totalPoints || 0)} 分
-                </div>
-              </div>
-            </div>
-
-            {/* 进度条 */}
-            <div className="mt-6">
-              <div className="mb-2 flex justify-between text-sm opacity-90">
-                <span>等级进度</span>
-                <span>{points?.progress || 0}%</span>
-              </div>
-              <div className="h-3 overflow-hidden rounded-full bg-white/30">
-                <div
-                  className="h-full rounded-full bg-white transition-all duration-500"
-                  style={{ width: `${points?.progress || 0}%` }}
-                />
-              </div>
-            </div>
-          </Card>
-
-          {/* 子标签切换 */}
-          <div className="flex gap-2 border-b border-gray-200 dark:border-gray-700">
-            <button
-              onClick={() => setPointsTab("overview")}
-              className={`px-4 py-2 font-medium transition-colors ${pointsTab === "overview"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                }`}
-            >
-              等级说明
-            </button>
-            <button
-              onClick={() => setPointsTab("history")}
-              className={`px-4 py-2 font-medium transition-colors ${pointsTab === "history"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                }`}
-            >
-              积分历史
-            </button>
-            <button
-              onClick={() => setPointsTab("leaderboard")}
-              className={`px-4 py-2 font-medium transition-colors ${pointsTab === "leaderboard"
-                  ? "border-b-2 border-blue-600 text-blue-600"
-                  : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-                }`}
-            >
-              排行榜
-            </button>
-          </div>
-
-          {/* 等级说明 */}
-          {pointsTab === "overview" && (
-            <div className="space-y-4">
-              <Card className="p-6">
-                <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">等级体系</h3>
-                <div className="grid gap-3">
-                  {[0, 100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500].map((threshold, index) => (
-                    <div
-                      key={index}
-                      className={`flex items-center justify-between rounded-lg border p-3 ${(points?.level || 0) === index
-                          ? "border-blue-500 bg-blue-50 dark:bg-blue-900/20"
-                          : "border-gray-200 dark:border-gray-700"
-                        }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl font-bold text-gray-900 dark:text-gray-100">Lv.{index}</span>
-                        {(points?.level || 0) === index && (
-                          <span className="rounded-full bg-blue-600 px-2 py-0.5 text-xs font-semibold text-white">
-                            当前等级
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">
-                        {threshold} -{" "}
-                        {index < 10 ? [100, 300, 600, 1000, 1500, 2100, 2800, 3600, 4500, 5500][index] - 1 : "∞"} 分
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card className="p-6">
-                <h3 className="mb-4 text-xl font-semibold text-gray-900 dark:text-gray-100">获取积分方式</h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-gray-600 dark:text-gray-400">发布帖子</span>
-                    <span className="font-semibold text-green-600">+10 分</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-gray-600 dark:text-gray-400">发表评论</span>
-                    <span className="font-semibold text-green-600">+5 分</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-gray-600 dark:text-gray-400">收到点赞</span>
-                    <span className="font-semibold text-green-600">+2 分</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-gray-600 dark:text-gray-400">每日登录</span>
-                    <span className="font-semibold text-green-600">+5 分</span>
-                  </div>
-                  <div className="flex justify-between py-2 border-b border-gray-100 dark:border-gray-800">
-                    <span className="text-gray-600 dark:text-gray-400">连续登录</span>
-                    <span className="font-semibold text-green-600">+10 分</span>
-                  </div>
-                  <div className="flex justify-between py-2">
-                    <span className="text-gray-600 dark:text-gray-400">删除内容</span>
-                    <span className="font-semibold text-red-600">相应扣分</span>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          )}
-
-          {/* 积分历史 */}
-          {pointsTab === "history" && (
-            <div className="space-y-3">
-              {pointsHistory?.data.map((item: any) => (
-                <Card key={item.id} className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex-1">
-                      <div className="mb-1 flex items-center gap-2">
-                        <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {item.action.replace(/_/g, " ")}
-                        </span>
-                        <span className={`text-lg font-bold ${item.points > 0 ? "text-green-600" : "text-red-600"}`}>
-                          {item.points > 0 ? "+" : ""}
-                          {item.points}
-                        </span>
-                      </div>
-                      {item.reason && <p className="text-sm text-gray-600 dark:text-gray-400">{item.reason}</p>}
-                      <p className="mt-1 text-xs text-gray-500">{formatTime(item.createdAt)}</p>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-
-              {/* 分页 */}
-              {pointsHistory?.meta && (
-                <div className="mt-6 flex justify-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={historyPage === 1}
-                    onClick={() => setHistoryPage(historyPage - 1)}
-                  >
-                    上一页
-                  </Button>
-                  <span className="flex items-center px-4 text-sm text-gray-600 dark:text-gray-400">
-                    第 {historyPage} / {pointsHistory.meta.totalPages} 页
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={historyPage >= pointsHistory.meta.totalPages}
-                    onClick={() => setHistoryPage(historyPage + 1)}
-                  >
-                    下一页
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* 排行榜 */}
-          {pointsTab === "leaderboard" && (
-            <div className="space-y-3">
-              {leaderboard?.map((item: any, index: number) => (
-                <Card key={item.id} className="p-4">
-                  <div className="flex items-center gap-4">
-                    <div
-                      className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-lg font-bold ${index === 0
-                          ? "bg-yellow-500 text-white"
-                          : index === 1
-                            ? "bg-gray-400 text-white"
-                            : index === 2
-                              ? "bg-orange-600 text-white"
-                              : "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                        }`}
-                    >
-                      {index + 1}
-                    </div>
-
-                    <div className="flex items-center gap-3 flex-1">
-                      {item.user?.avatar ? (
-                        <img
-                          src={item.user.avatar}
-                          alt={item.user.nickname}
-                          className="h-12 w-12 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gradient-to-br from-blue-500 to-purple-600 text-lg font-semibold text-white">
-                          {(item.user?.nickname || item.user?.username)?.[0] || "?"}
-                        </div>
-                      )}
-                      <div className="flex-1">
-                        <div className="font-semibold text-gray-900 dark:text-gray-100">
-                          {item.user?.nickname || item.user?.username}
-                        </div>
-                        <div className="text-sm text-gray-600 dark:text-gray-400">Lv.{item.level}</div>
-                      </div>
-                    </div>
-
-                    <div className="text-right">
-                      <div className="text-2xl font-bold text-blue-600">{item.totalPoints}</div>
-                      <div className="text-xs text-gray-500">积分</div>
-                    </div>
-                  </div>
-                </Card>
-              ))}
-            </div>
           )}
         </div>
       )}

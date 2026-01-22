@@ -19,7 +19,11 @@ export const commentApi = {
    * POST /comments
    */
   createComment: (data: CreateCommentDto) => {
-    return api.post<Comment>('/comments', data);
+    // 移除 undefined 的字段，避免发送到服务器
+    const cleanData = Object.fromEntries(
+      Object.entries(data).filter(([_, v]) => v !== undefined)
+    ) as CreateCommentDto;
+    return api.post<Comment>('/comments', cleanData);
   },
 
   /**

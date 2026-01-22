@@ -81,7 +81,7 @@ export const useUserPosts = (userId: string, page = 1, limit = 20) => {
 export const useUserFollowers = (userId: string, page = 1, limit = 20) => {
   return useQuery({
     queryKey: ['users', userId, 'followers', page, limit],
-    queryFn: () => followApi.getFollowers(userId, { page, limit }),
+    queryFn: () => followApi.getFollowers(userId, page, limit),
     enabled: !!userId,
     staleTime: 1000 * 60 * 5,
   });
@@ -90,7 +90,7 @@ export const useUserFollowers = (userId: string, page = 1, limit = 20) => {
 export const useUserFollowing = (userId: string, page = 1, limit = 20) => {
   return useQuery({
     queryKey: ['users', userId, 'following', page, limit],
-    queryFn: () => followApi.getFollowing(userId, { page, limit }),
+    queryFn: () => followApi.getFollowing(userId, page, limit),
     enabled: !!userId,
     staleTime: 1000 * 60 * 5,
   });

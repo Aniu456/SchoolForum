@@ -2,46 +2,15 @@ import { api, PaginatedResponse } from '../core/client';
 import type { Post } from '@/types';
 
 /**
- * 收藏夹类型
- */
-export interface FavoriteFolder {
-  id: string;
-  name: string;
-  description?: string;
-  userId: string;
-  isDefault: boolean;
-  favoriteCount: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-/**
  * 收藏记录类型
  */
 export interface Favorite {
   id: string;
   userId: string;
   postId: string;
-  folderId: string;
   note?: string;
   createdAt: string;
   post: Post;
-}
-
-/**
- * 创建收藏夹请求
- */
-export interface CreateFolderDto {
-  name: string; // 必填，<=50 字符
-  description?: string; // 可选，<=200 字符
-}
-
-/**
- * 更新收藏夹请求
- */
-export interface UpdateFolderDto {
-  name?: string; // 可选，<=50 字符
-  description?: string; // 可选，<=200 字符
 }
 
 /**
@@ -49,56 +18,21 @@ export interface UpdateFolderDto {
  */
 export interface CreateFavoriteDto {
   postId: string; // 必填，帖子 UUID
-  folderId: string; // 必填，收藏夹 UUID（必须属于当前用户）
-  note?: string; // 可选，备注 <=500 字符
+  note?: string; // 可选，备注
+}
+
+/**
+ * 切换收藏响应
+ */
+export interface ToggleFavoriteResponse {
+  isFavorited: boolean;
+  message: string;
 }
 
 /**
  * 收藏相关 API（模块：Favorites）
  */
 export const favoriteApi = {
-  /**
-   * 创建收藏夹
-   * POST /favorites/folders
-   */
-  createFolder: (data: CreateFolderDto) => {
-    return api.post<FavoriteFolder>('/favorites/folders', data);
-  },
-
-  /**
-   * 获取收藏夹列表
-   * GET /favorites/folders
-   */
-  getFolders: (page = 1, limit = 20) => {
-    return api.get<PaginatedResponse<FavoriteFolder>>('/favorites/folders', {
-      params: { page, limit },
-    });
-  },
-
-  /**
-   * 获取收藏夹详情
-   * GET /favorites/folders/:id
-   */
-  getFolder: (folderId: string) => {
-    return api.get<FavoriteFolder>(`/favorites/folders/${folderId}`);
-  },
-
-  /**
-   * 更新收藏夹
-   * PATCH /favorites/folders/:id
-   */
-  updateFolder: (folderId: string, data: UpdateFolderDto) => {
-    return api.patch<FavoriteFolder>(`/favorites/folders/${folderId}`, data);
-  },
-
-  /**
-   * 删除收藏夹
-   * DELETE /favorites/folders/:id
-   */
-  deleteFolder: (folderId: string) => {
-    return api.delete<{ message: string }>(`/favorites/folders/${folderId}`);
-  },
-
   /**
    * 收藏帖子
    * POST /favorites
@@ -108,7 +42,33 @@ export const favoriteApi = {
   },
 
   /**
-   * 取消收藏
+   * 切换收藏状态（收藏/取消收藏）
+   * POST /favorites/toggle
+   */
+  toggleFavorite: (postId: string) => {
+    return api.post<ToggleFavoriteResponse>('/favorites/toggle', { postId });
+  },
+
+  /**
+   * 获取用户收藏列表
+   * GET /favorites
+   */
+  getFavorites: (page = 1, limit = 20) => {
+    return api.get<PaginatedResponse<Favorite>>('/favorites', {
+      params: { page, limit },
+    });
+  },
+
+  /**
+   * 检查收藏状态
+   * GET /favorites/check/:postId
+   */
+  checkFavorite: (postId: string) => {
+    return api.get<{ isFavorited: boolean }>(`/favorites/check/${postId}`);
+  },
+
+  /**
+   * 取消收藏（通过收藏ID）
    * DELETE /favorites/:id
    */
   deleteFavorite: (favoriteId: string) => {
@@ -116,12 +76,10 @@ export const favoriteApi = {
   },
 
   /**
-   * 获取收藏夹中的帖子列表
-   * GET /favorites/folders/:folderId/posts
+   * 取消收藏（通过帖子ID）
+   * DELETE /favorites/post/:postId
    */
-  getFolderPosts: (folderId: string, page = 1, limit = 20) => {
-    return api.get<PaginatedResponse<Favorite>>(`/favorites/folders/${folderId}/posts`, {
-      params: { page, limit },
-    });
+  deleteFavoriteByPost: (postId: string) => {
+    return api.delete<{ message: string }>(`/favorites/post/${postId}`);
   },
 };

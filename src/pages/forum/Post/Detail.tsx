@@ -1,12 +1,15 @@
 "use client"
 
-import { commentApi, favoriteApi, followApi, likeApi, messageApi, postApi } from "@/api"
+import { favoriteApi, followApi, likeApi, messageApi, postApi } from "@/api"
 import { Avatar, Button, ConfirmDialog, EmptyState, LoadingState, RichTextEditor } from "@/components"
+import CommentItem from "@/components/composite/CommentItem"
+import ShareButton from "@/components/composite/ShareButton"
 import { useComments, useCreateComment } from "@/hooks/useComments"
 import { usePost } from "@/hooks/usePosts"
 import { Comment } from "@/types"
 import { formatNumber, formatTime } from "@/utils/format"
 import { stripHtml } from "@/utils/helpers"
+import { sanitizeHtml } from "@/utils/sanitize"
 import { useToast } from "@/utils/toast-hook"
 import { useEffect, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
@@ -14,145 +17,7 @@ import { Link, useNavigate, useParams } from "react-router-dom"
 import NotFoundPage from "@/pages/system/NotFound"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, Eye, MessageSquare, Share2, Star, ThumbsUp } from "lucide-react"
-
-// 评论组件（支持嵌套回复）
-function CommentItem({
-  comment,
-  onReply,
-  depth = 0,
-}: {
-  comment: Comment
-  onReply: (commentId: string, username: string) => void
-  depth?: number
-}) {
-  const [isLiked, setIsLiked] = useState(comment.isLiked || false)
-  const [likes, setLikes] = useState(comment.likes ?? comment.likeCount ?? 0)
-  const [replies, setReplies] = useState<Comment[] | undefined>(comment.replies)
-  const [loadingReplies, setLoadingReplies] = useState(false)
-  const { showError } = useToast()
-  const replyCount = typeof comment.replyCount === "number" ? comment.replyCount : replies?.length ?? 0
-
-  // 当父级传入的 comment.replies 变化时，同步到本地 replies 状态
-  useEffect(() => {
-    setReplies(comment.replies)
-  }, [comment.replies])
-
-  const handleLike = async () => {
-    try {
-      const res = await likeApi.toggleLike({ targetId: comment.id, targetType: "COMMENT" })
-      const nextLiked = res.isLiked
-      const nextCount = res.likeCount
-      setIsLiked(nextLiked)
-      setLikes(nextCount)
-    } catch {
-      showError("操作失败，请重试")
-    }
-  }
-
-  const handleLoadMoreReplies = async () => {
-    if (loadingReplies) return
-    setLoadingReplies(true)
-    try {
-      const res = await commentApi.getReplies(comment.id, 1, 20)
-      const all = (res as any)?.data || []
-      if (Array.isArray(all)) {
-        setReplies(all as Comment[])
-      }
-    } catch {
-      showError("加载回复失败，请重试")
-    } finally {
-      setLoadingReplies(false)
-    }
-  }
-
-  return (
-    <div className={depth > 0 ? "ml-6 border-l border-gray-200 pl-4" : ""}>
-      <div className="rounded-xl border border-gray-100 bg-white/80 p-4 shadow-sm">
-        <div className="flex items-start gap-3">
-          {comment.author && (
-            <Avatar
-              src={comment.author.avatar}
-              alt={comment.author.username}
-              username={comment.author.username}
-              size={40}
-              seed={comment.author.id}
-            />
-          )}
-          <div className="flex-1">
-            <div className="flex items-center gap-2 text-sm text-gray-500">
-              {comment.author && (
-                <Link to={`/users/${comment.author.id}`} className="font-semibold text-gray-900 hover:text-blue-600">
-                  {comment.author.username}
-                </Link>
-              )}
-              {comment.replyTo && (
-                <>
-                  <span className="text-gray-400">回复</span>
-                  <Link to={`/users/${comment.replyTo.id}`} className="font-semibold text-blue-600 hover:underline">
-                    {comment.replyTo.username}
-                  </Link>
-                </>
-              )}
-              <span>· {formatTime(comment.createdAt)}</span>
-            </div>
-            <div
-              className="prose prose-sm mt-1 max-w-none wrap-break-word text-gray-700"
-              dangerouslySetInnerHTML={{ __html: comment.content }}
-            />
-            <div className="mt-2 flex items-center gap-3 text-sm text-gray-500">
-              <button
-                onClick={handleLike}
-                className="flex items-center gap-1 text-gray-500 transition hover:text-blue-600"
-              >
-                <ThumbsUp className="h-4 w-4" />
-                <span>{likes}</span>
-              </button>
-              {comment.author && (
-                <button
-                  onClick={() => {
-                    onReply(comment.id, comment.author!.username)
-                    setTimeout(() => {
-                      const commentInput = document.querySelector("[data-comment-input]")
-                      if (commentInput) {
-                        commentInput.scrollIntoView({ behavior: "smooth", block: "center" })
-                      }
-                    }, 100)
-                  }}
-                  className="text-blue-600 hover:underline"
-                >
-                  回复
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-      {/* 嵌套回复 - 不限制层级 */}
-      {replies && replies.length > 0 && (
-        <div className="mt-3 space-y-3">
-          {replies.map((reply) => (
-            <CommentItem key={reply.id} comment={reply} onReply={onReply} depth={depth + 1} />
-          ))}
-        </div>
-      )}
-      {((typeof comment.hasMoreReplies === "boolean" && comment.hasMoreReplies) ||
-        replyCount > (replies?.length ?? 0)) && (
-        <div className="mt-2 pl-12 text-sm">
-          <button
-            onClick={handleLoadMoreReplies}
-            className="text-blue-600 hover:underline disabled:text-gray-400"
-            disabled={loadingReplies}
-          >
-            {loadingReplies
-              ? "加载回复中..."
-              : `查看更多回复${typeof comment.replyCount === "number" ? `（共 ${comment.replyCount} 条）` : ""}`}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
+import { ArrowLeft, Eye, MessageSquare, Star, ThumbsUp } from "lucide-react"
 
 export default function PostDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -175,10 +40,7 @@ export default function PostDetailPage() {
   const [replyTo, setReplyTo] = useState<{ id: string; username: string } | null>(null)
   const [isFollowingAuthor, setIsFollowingAuthor] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [showFavoriteDialog, setShowFavoriteDialog] = useState(false)
-  const [folders, setFolders] = useState<any[]>([])
-  const [selectedFolderId, setSelectedFolderId] = useState("")
-  const [favoriteNote, setFavoriteNote] = useState("")
+  // 收藏夹功能已简化为直接收藏/取消收藏
 
   // 使用 post 数据直接计算状态
   const baseIsLiked = post?.isLikedByMe ?? post?.isLiked ?? false
@@ -329,7 +191,9 @@ export default function PostDetailPage() {
     if (!post.author?.id || isAuthor) return
 
     try {
-      const conversation = await messageApi.getOrCreateConversation({ participantId: post.author.id })
+      const conversation = await messageApi.getOrCreateConversation({
+        participantId: post.author.id,
+      })
       navigate(`/messages/${conversation.id}`)
     } catch {
       showError("打开私信失败，请重试")
@@ -344,7 +208,7 @@ export default function PostDetailPage() {
 
     try {
       const res = await likeApi.toggleLike({ targetId: post.id, targetType: "POST" })
-      setLocalIsLiked(res.isLiked)
+      setLocalIsLiked(res.action === "liked")
       setLocalLikes(res.likeCount)
       // 刷新缓存并重新获取数据
       await queryClient.invalidateQueries({ queryKey: ["post", post.id] })
@@ -360,60 +224,19 @@ export default function PostDetailPage() {
       showError("请先登录")
       return
     }
-    if (localCollected && favoriteRecordId) {
-      try {
-        await favoriteApi.deleteFavorite(favoriteRecordId)
+    try {
+      const res = await favoriteApi.toggleFavorite(post.id)
+      if (res.isFavorited) {
+        showSuccess("已收藏该帖子")
+      } else {
         showSuccess("已取消收藏")
-        // 刷新缓存并重新获取数据
-        await queryClient.invalidateQueries({ queryKey: ["post", post.id] })
-        await queryClient.invalidateQueries({ queryKey: ["posts"] })
-        await refetchPost()
-      } catch {
-        showError("取消收藏失败，请重试")
       }
-      return
-    }
-    if (localCollected) {
-      showSuccess("已收藏该帖子")
-      return
-    }
-    try {
-      const res = await favoriteApi.getFolders(1, 100)
-      const folderList = (res as any)?.data || []
-      if (!folderList || folderList.length === 0) {
-        const created = await favoriteApi.createFolder({ name: "默认收藏夹" })
-        await favoriteApi.createFavorite({ postId: post.id, folderId: created.id })
-        showSuccess("已加入默认收藏夹")
-        // 刷新缓存并重新获取数据
-        await queryClient.invalidateQueries({ queryKey: ["post", post.id] })
-        await queryClient.invalidateQueries({ queryKey: ["posts"] })
-        await refetchPost()
-        return
-      }
-      setFolders(folderList)
-      setSelectedFolderId(folderList[0]?.id || "")
-      setShowFavoriteDialog(true)
-    } catch {
-      showError("加载收藏夹失败，请重试")
-    }
-  }
-
-  const confirmAddFavorite = async () => {
-    if (!selectedFolderId) {
-      showError("请选择收藏夹")
-      return
-    }
-    try {
-      await favoriteApi.createFavorite({ postId: post.id, folderId: selectedFolderId, note: favoriteNote || undefined })
-      setShowFavoriteDialog(false)
-      setFavoriteNote("")
-      showSuccess("已加入收藏")
       // 刷新缓存并重新获取数据
       await queryClient.invalidateQueries({ queryKey: ["post", post.id] })
       await queryClient.invalidateQueries({ queryKey: ["posts"] })
       await refetchPost()
     } catch {
-      showError("收藏失败，请重试")
+      showError("操作失败，请重试")
     }
   }
 
@@ -494,61 +317,70 @@ export default function PostDetailPage() {
         <div className="grid gap-6 lg:grid-cols-[2fr_0.9fr]">
           <div className="space-y-6">
             <article className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-              <div className="p-6 sm:p-8">
-                <div className="mb-3 flex flex-wrap items-center gap-2">
-                  {post.isPinned && (
-                    <span className="rounded bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-500">置顶</span>
-                  )}
-                  {post.isHot && (
-                    <span className="rounded bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-500">热门</span>
+              <div className="p-6 sm:p-10">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  {(post.isPinned || post.isHot) && (
+                    <div className="flex items-center gap-2 mr-1">
+                      {post.isPinned && (
+                        <span className="flex items-center justify-center rounded-md bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600 shadow-sm ring-1 ring-red-100">
+                          置顶
+                        </span>
+                      )}
+                      {post.isHot && (
+                        <span className="flex items-center justify-center rounded-md bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-600 shadow-sm ring-1 ring-orange-100">
+                          热门
+                        </span>
+                      )}
+                    </div>
                   )}
                   {post.tags?.map((tag) => (
                     <Link
                       key={tag}
                       to={`/search?q=${encodeURIComponent(tag)}`}
-                      className="rounded-full bg-gray-100 px-3 py-1 text-xs font-semibold text-gray-600 hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600"
                     >
                       #{tag}
                     </Link>
                   ))}
                 </div>
 
-                <h1 className="mb-4 text-3xl font-black leading-tight text-gray-900 sm:text-4xl">{post.title}</h1>
+                <h1 className="mb-6 text-3xl font-extrabold leading-tight text-gray-900 sm:text-4xl tracking-tight">
+                  {post.title}
+                </h1>
 
-                <div className="flex flex-col gap-4 pb-6 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-4 pb-8 mb-8 border-b border-gray-50 sm:flex-row sm:items-center sm:justify-between">
                   {post.author && (
-                    <div className="flex items-center gap-3">
-                      <Link to={`/users/${post.author.id}`}>
+                    <div className="flex items-center gap-4">
+                      <Link to={`/users/${post.author.id}`} className="shrink-0">
                         <Avatar
                           src={post.author.avatar}
                           alt={post.author.username}
                           username={post.author.username}
-                          size={56}
+                          size={52}
                           seed={post.author.id}
+                          className="ring-2 ring-white shadow-sm"
                         />
                       </Link>
                       <div>
                         <div className="flex items-center gap-2">
                           <Link
                             to={`/users/${post.author.id}`}
-                            className="text-base font-semibold text-gray-900 hover:text-blue-600"
+                            className="text-base font-bold text-gray-900 hover:text-blue-600 transition-colors"
                           >
                             {post.author.username}
                           </Link>
-                          <span className="rounded bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-600">
-                            楼主
-                          </span>
+                          {isAuthor && (
+                            <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
+                              楼主
+                            </span>
+                          )}
                         </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-3 text-xs text-gray-500">
-                          <span>{formatTime(post.createdAt)}</span>
-                          <span className="flex items-center gap-1">
-                            <Eye className="h-4 w-4" />
-                            {formatNumber(post.viewCount ?? 0)}
+                        <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                          <span title={new Date(post.createdAt).toLocaleString()} className="cursor-help">
+                            {formatTime(post.createdAt)}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <MessageSquare className="h-4 w-4" />
-                            {formatNumber(post.commentCount ?? comments.length)}
-                          </span>
+                          <span className="h-3 w-px bg-gray-200"></span>
+                          <span>发布于 校园论坛</span>
                         </div>
                       </div>
                     </div>
@@ -556,13 +388,18 @@ export default function PostDetailPage() {
 
                   {isAuthor && (
                     <div className="flex flex-wrap gap-2">
-                      <Button variant="outline" size="sm" onClick={handleEdit}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleEdit}
+                        className="text-gray-500 hover:text-blue-600 hover:bg-blue-50"
+                      >
                         编辑
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="ghost"
                         size="sm"
-                        className="border-red-200 text-red-600 hover:bg-red-50"
+                        className="text-gray-400 hover:text-red-600 hover:bg-red-50"
                         onClick={handleDelete}
                       >
                         删除
@@ -572,9 +409,15 @@ export default function PostDetailPage() {
                 </div>
 
                 {post.images && post.images.length > 0 && (
-                  <div className="mb-6 space-y-4">
+                  <div className="mb-8 space-y-4">
                     {post.images.map((img, index) => (
-                      <img key={img || index} src={img} alt={post.title} className="w-full rounded-2xl object-cover" />
+                      <img
+                        key={img || index}
+                        src={img}
+                        alt={post.title}
+                        loading="lazy"
+                        className="w-full rounded-2xl object-cover shadow-sm ring-1 ring-gray-100"
+                      />
                     ))}
                   </div>
                 )}
@@ -582,47 +425,72 @@ export default function PostDetailPage() {
                 <div className="prose prose-lg max-w-none text-gray-800">
                   <div
                     className="whitespace-pre-wrap leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: post.content }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
                   />
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 bg-gray-50 px-6 py-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <button
-                    onClick={handleLike}
-                    className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
-                      localIsLiked ? "bg-blue-600 text-white shadow-sm" : "bg-white text-gray-700 hover:bg-gray-100"
-                    }`}
-                  >
-                    <ThumbsUp className="h-4 w-4" />
-                    <span>{formatNumber(localLikes)} 赞</span>
-                  </button>
-                  {currentUser && (
+              <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-gray-50 bg-white/80 px-6 py-4 backdrop-blur-md sm:-mx-8 sm:-mb-8 sm:px-8">
+                <div className="flex flex-1 items-center justify-center gap-2 sm:justify-start">
+                  {/* Main Actions Centered on Mobile, Left on Desktop effectively (or just flex start) */}
+                  <div className="flex items-center gap-2">
                     <button
-                      onClick={handleCollect}
-                      className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium transition ${
-                        localCollected
-                          ? "bg-amber-100 text-amber-700 shadow-sm"
-                          : "bg-white text-gray-700 hover:bg-gray-100"
+                      onClick={handleLike}
+                      className={`group flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all active:scale-95 ${
+                        localIsLiked
+                          ? "bg-red-50 text-red-600 shadow-sm ring-1 ring-red-100"
+                          : "bg-gray-50 text-gray-600 hover:bg-gray-100"
                       }`}
                     >
-                      <Star className="h-4 w-4" />
-                      <span>
-                        {localCollected ? "已收藏" : "收藏"} {formatNumber(favoriteCount)}
-                      </span>
+                      <ThumbsUp
+                        className={`h-4 w-4 transition-transform group-hover:-rotate-12 ${
+                          localIsLiked ? "fill-current" : ""
+                        }`}
+                      />
+                      <span>{formatNumber(localLikes)} 赞</span>
                     </button>
-                  )}
-                  <div className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-gray-500">
-                    <MessageSquare className="h-4 w-4" />
-                    {formatNumber(comments.length)}
+                    {currentUser && (
+                      <button
+                        onClick={handleCollect}
+                        className={`group flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all active:scale-95 ${
+                          localCollected
+                            ? "bg-amber-50 text-amber-600 shadow-sm ring-1 ring-amber-100"
+                            : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                        }`}
+                      >
+                        <Star
+                          className={`h-4 w-4 transition-transform group-hover:rotate-12 ${
+                            localCollected ? "fill-current" : ""
+                          }`}
+                        />
+                        <span>
+                          {localCollected ? "已收藏" : "收藏"} {formatNumber(favoriteCount)}
+                        </span>
+                      </button>
+                    )}
                   </div>
-                  <div className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs text-gray-500">
-                    <Eye className="h-4 w-4" />
-                    {formatNumber(post.viewCount ?? 0)}
+
+                  <div className="hidden h-4 w-px bg-gray-200 sm:block mx-2"></div>
+
+                  <div className="hidden sm:flex items-center gap-4 text-xs text-gray-400">
+                    <span className="flex items-center gap-1.5" title="评论数">
+                      <MessageSquare className="h-4 w-4" />
+                      {formatNumber(comments.length)}
+                    </span>
+                    <span className="flex items-center gap-1.5" title="阅读量">
+                      <Eye className="h-4 w-4" />
+                      {formatNumber(post.viewCount ?? 0)}
+                    </span>
                   </div>
                 </div>
-                <ShareButton url={`/posts/${post.id}`} title={post.title} description={stripHtml(post.content)} />
+                <div className="shrink-0">
+                  <ShareButton
+                    url={`/posts/${post.id}`}
+                    title={post.title}
+                    description={stripHtml(post.content)}
+                    className="rounded-full bg-gray-50 p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
+                  />
+                </div>
               </div>
             </article>
 
@@ -642,7 +510,7 @@ export default function PostDetailPage() {
                 )}
                 <RichTextEditor
                   content={commentContent}
-                  onChange={setCommentContent}
+                  onChange={(val) => setCommentContent(val)}
                   placeholder={replyTo ? `回复 ${replyTo.username}...` : "写下你的评论..."}
                   className="min-h-[150px] bg-white"
                 />
@@ -671,8 +539,8 @@ export default function PostDetailPage() {
           </div>
 
           <aside className="space-y-4 lg:sticky lg:top-24">
-            <div className="rounded-2xl border border-gray-100 bg-white p-5 shadow-sm">
-              <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-gray-400">About Author</h4>
+            <div className="rounded-2xl bg-white p-5 shadow-soft">
+              <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-gray-400">关于作者</h4>
               <div className="mt-3 flex items-center gap-3">
                 {post.author && (
                   <>
@@ -684,7 +552,7 @@ export default function PostDetailPage() {
                       seed={post.author.id}
                     />
                     <div>
-                      <div className="text-base font-semibold text-gray-900">{post.author.username}</div>
+                      <div className="text-base font-semibold text-gray-900">{post.author.nickname}</div>
                       <div className="text-xs text-gray-500">活跃用户</div>
                     </div>
                   </>
@@ -731,140 +599,7 @@ export default function PostDetailPage() {
           cancelText="取消"
           type="danger"
         />
-
-        {/* 收藏夹选择对话框 */}
-        <ConfirmDialog
-          isOpen={showFavoriteDialog}
-          onClose={() => setShowFavoriteDialog(false)}
-          onConfirm={confirmAddFavorite}
-          title="加入收藏夹"
-          confirmText="加入"
-          cancelText="取消"
-        >
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700">选择收藏夹</label>
-              <select
-                value={selectedFolderId}
-                onChange={(e) => setSelectedFolderId(e.target.value)}
-                className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-              >
-                {folders.map((f: any) => (
-                  <option key={f.id} value={f.id}>
-                    {f.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700">备注（可选）</label>
-              <input
-                type="text"
-                value={favoriteNote}
-                onChange={(e) => setFavoriteNote(e.target.value)}
-                placeholder="例如：课程参考、考试复习..."
-                className="mt-2 w-full rounded-lg border px-3 py-2 text-sm"
-              />
-            </div>
-          </div>
-        </ConfirmDialog>
       </div>
     </div>
-  )
-}
-
-function ShareButton({
-  url,
-  title,
-  description,
-  className,
-}: {
-  url: string
-  title: string
-  description?: string
-  className?: string
-}) {
-  const [isOpen, setIsOpen] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const shareUrl = typeof window !== "undefined" ? window.location.origin + url : url
-
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(shareUrl)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      console.error("复制失败:", err)
-    }
-  }
-
-  const handleShare = async (platform: string) => {
-    const urls: Record<string, string> = {
-      twitter: `https://twitter.com/intent/tweet?text=${encodeURIComponent(title)}&url=${encodeURIComponent(shareUrl)}`,
-      facebook: `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`,
-      weibo: `https://service.weibo.com/share/share.php?title=${encodeURIComponent(title)}&url=${encodeURIComponent(
-        shareUrl,
-      )}`,
-    }
-    if (urls[platform]) {
-      window.open(urls[platform], "_blank", "width=600,height=400")
-    } else if (navigator.share) {
-      try {
-        await navigator.share({ title, text: description || title, url: shareUrl })
-      } catch (err) {
-        console.error("分享失败:", err)
-      }
-    }
-  }
-
-  return (
-    <>
-      <Button
-        variant="outline"
-        onClick={() => setIsOpen(true)}
-        className={`flex items-center gap-2 ${className || ""}`}
-      >
-        <Share2 className="h-5 w-5" />
-        分享
-      </Button>
-      <ConfirmDialog
-        isOpen={isOpen}
-        onClose={() => setIsOpen(false)}
-        title="分享帖子"
-        onConfirm={() => setIsOpen(false)}
-        confirmText="关闭"
-      >
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">链接地址</label>
-            <div className="mt-2 flex gap-2">
-              <input
-                type="text"
-                value={shareUrl}
-                readOnly
-                className="flex-1 rounded-lg border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-              />
-              <Button variant="primary" size="sm" onClick={handleCopy}>
-                {copied ? "已复制" : "复制"}
-              </Button>
-            </div>
-          </div>
-          <div>
-            <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">分享到</label>
-            <div className="flex gap-2">
-              <Button onClick={() => handleShare("twitter")} className="flex-1 bg-blue-400 hover:bg-blue-500">
-                Twitter
-              </Button>
-              <Button onClick={() => handleShare("facebook")} className="flex-1 bg-blue-600 hover:bg-blue-700">
-                Facebook
-              </Button>
-              <Button onClick={() => handleShare("weibo")} className="flex-1 bg-red-500 hover:bg-red-600">
-                微博
-              </Button>
-            </div>
-          </div>
-        </div>
-      </ConfirmDialog>
-    </>
   )
 }

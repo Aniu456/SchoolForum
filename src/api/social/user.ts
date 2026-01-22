@@ -1,103 +1,102 @@
-import { api, PaginatedResponse, AlternatePaginatedResponse } from '../core/client';
-import type { User, Post } from '@/types';
+import type { Post, User } from "@/types"
+import { AlternatePaginatedResponse, PaginatedResponse, api } from "../core/client"
 
 /**
  * 用户认证响应
  */
 export interface AuthResponse {
-  user: User;
-  accessToken: string;
-  refreshToken: string;
+  user: User
+  accessToken: string
+  refreshToken: string
 }
 
 /**
  * 登录请求
  */
 export interface LoginDto {
-  email: string;
-  password: string;
+  email: string
+  password: string
 }
 
 /**
  * 注册请求
  */
 export interface RegisterDto {
-  username: string;
-  email: string;
-  password: string;
-  studentId?: string;
-  nickname?: string;
-  role?: 'STUDENT' | 'TEACHER' | 'ADMIN';
+  username: string
+  email: string
+  password: string
+  nickname?: string
+  role?: "USER" | "ADMIN"
 }
 
 /**
  * 管理员注册请求
  */
 export interface RegisterAdminDto extends RegisterDto {
-  adminKey: string;
+  adminKey: string
 }
 
 /**
  * 刷新令牌请求
  */
 export interface RefreshTokenDto {
-  refreshToken: string;
+  refreshToken: string
 }
 
 /**
  * 更新用户资料请求
  */
 export interface UpdateUserDto {
-  nickname?: string;
-  bio?: string;
-  avatar?: string;
+  nickname?: string
+  bio?: string
+  avatar?: string
 }
 
 /**
  * 用户详情响应
  */
 export interface UserDetailResponse {
-  id: string;
-  username: string;
-  nickname: string;
-  avatar?: string;
-  bio?: string;
-  role: string;
-  createdAt: string;
-  postCount: number;
-  followerCount: number;
-  followingCount: number;
+  id: string
+  username: string
+  nickname: string
+  avatar?: string
+  bio?: string
+  role: string
+  createdAt: string
+  postCount: number
+  followerCount: number
+  followingCount: number
   // 兼容旧代码
   stats?: {
-    postCount: number;
-    followerCount: number;
-    followingCount: number;
-  };
-  followersCount?: number; // 别名
-  followers?: number; // 别名
-  following?: number; // 别名
-  email?: string; // 某些接口返回
+    postCount: number
+    followerCount: number
+    followingCount: number
+  }
+  followersCount?: number // 别名
+  followers?: number // 别名
+  following?: number // 别名
+  email?: string // 某些接口返回
 }
 
 /**
  * 关注用户请求
  */
 export interface CreateFollowDto {
-  followingId: string;
+  followingId: string
 }
 
 /**
  * 用户（带关注数）
  */
 export interface UserWithFollowCounts {
-  id: string;
-  username: string;
-  nickname: string;
-  avatar?: string;
-  bio?: string;
-  role: string;
-  followerCount: number;
-  followingCount: number;
+  id: string
+  username: string
+  nickname: string
+  avatar?: string
+  bio?: string
+  role: string
+  followerCount: number
+  followingCount: number
 }
 
 /**
@@ -109,7 +108,7 @@ export const authApi = {
    * POST /auth/register
    */
   register: (data: RegisterDto) => {
-    return api.post<AuthResponse>('/auth/register', data);
+    return api.post<AuthResponse>("/auth/register", data)
   },
 
   /**
@@ -117,7 +116,7 @@ export const authApi = {
    * POST /auth/register-admin
    */
   registerAdmin: (data: RegisterAdminDto) => {
-    return api.post<AuthResponse>('/auth/register-admin', data);
+    return api.post<AuthResponse>("/auth/register-admin", data)
   },
 
   /**
@@ -125,7 +124,7 @@ export const authApi = {
    * POST /auth/login
    */
   login: (data: LoginDto) => {
-    return api.post<AuthResponse>('/auth/login', data);
+    return api.post<AuthResponse>("/auth/login", data)
   },
 
   /**
@@ -133,7 +132,7 @@ export const authApi = {
    * POST /auth/refresh
    */
   refreshToken: (data: RefreshTokenDto) => {
-    return api.post<{ accessToken: string; refreshToken: string }>('/auth/refresh', data);
+    return api.post<{ accessToken: string; refreshToken: string }>("/auth/refresh", data)
   },
 
   /**
@@ -141,7 +140,7 @@ export const authApi = {
    * POST /auth/logout
    */
   logout: () => {
-    return api.post<{ message: string }>('/auth/logout');
+    return api.post<{ message: string }>("/auth/logout")
   },
 
   /**
@@ -149,7 +148,7 @@ export const authApi = {
    * POST /auth/forgot-password
    */
   forgotPassword: (data: { email: string }) => {
-    return api.post<{ message: string }>('/auth/forgot-password', data);
+    return api.post<{ message: string }>("/auth/forgot-password", data)
   },
 
   /**
@@ -157,7 +156,7 @@ export const authApi = {
    * POST /auth/verify-reset-token
    */
   verifyResetToken: (data: { token: string }) => {
-    return api.post<{ valid: boolean; message?: string }>('/auth/verify-reset-token', data);
+    return api.post<{ valid: boolean; message?: string }>("/auth/verify-reset-token", data)
   },
 
   /**
@@ -165,9 +164,9 @@ export const authApi = {
    * POST /auth/reset-password
    */
   resetPassword: (data: { token: string; password: string }) => {
-    return api.post<{ message: string }>('/auth/reset-password', data);
+    return api.post<{ message: string }>("/auth/reset-password", data)
   },
-};
+}
 
 /**
  * 用户相关 API（模块：Users）
@@ -178,7 +177,7 @@ export const userApi = {
    * GET /users/me
    */
   getCurrentUser: () => {
-    return api.get<User>('/users/me');
+    return api.get<User>("/users/me")
   },
 
   /**
@@ -186,7 +185,7 @@ export const userApi = {
    * PATCH /users/me
    */
   updateProfile: (data: UpdateUserDto) => {
-    return api.patch<User>('/users/me', data);
+    return api.patch<User>("/users/me", data)
   },
 
   /**
@@ -194,7 +193,7 @@ export const userApi = {
    * GET /users/:id
    */
   getUser: (userId: string) => {
-    return api.get<UserDetailResponse>(`/users/${userId}`);
+    return api.get<UserDetailResponse>(`/users/${userId}`)
   },
 
   /**
@@ -204,7 +203,7 @@ export const userApi = {
   getUserPosts: (userId: string, page = 1, limit = 20) => {
     return api.get<AlternatePaginatedResponse<Post>>(`/users/${userId}/posts`, {
       params: { page, limit },
-    });
+    })
   },
 
   /**
@@ -214,9 +213,19 @@ export const userApi = {
   getUserLikes: (userId: string, page = 1, limit = 20) => {
     return api.get<PaginatedResponse<any>>(`/users/${userId}/likes`, {
       params: { page, limit },
-    });
+    })
   },
-};
+
+  /**
+   * 获取用户活动（公开）
+   * GET /users/:id/activity
+   */
+  getUserActivity: (userId: string, params?: { page?: number; limit?: number; type?: string }) => {
+    return api.get<PaginatedResponse<any>>(`/users/${userId}/activity`, {
+      params,
+    })
+  },
+}
 
 /**
  * 关注相关 API（模块：Follows）
@@ -229,7 +238,7 @@ export const followApi = {
   followUser: (userId: string) => {
     return api.post<{ message: string; followingId: string }>(`/users/${userId}/follow`, {
       followingId: userId,
-    });
+    })
   },
 
   /**
@@ -237,7 +246,15 @@ export const followApi = {
    * DELETE /users/:id/follow
    */
   unfollowUser: (userId: string) => {
-    return api.delete<{ message: string; followingId: string }>(`/users/${userId}/follow`);
+    return api.delete<{ message: string; followingId: string }>(`/users/${userId}/follow`)
+  },
+
+  /**
+   * 获取关注状态
+   * GET /users/:id/follow/status
+   */
+  checkFollowing: (userId: string) => {
+    return api.get<{ isFollowing: boolean }>(`/users/${userId}/follow/status`)
   },
 
   /**
@@ -247,7 +264,7 @@ export const followApi = {
   getFollowing: (userId: string, page = 1, limit = 20) => {
     return api.get<PaginatedResponse<UserWithFollowCounts>>(`/users/${userId}/following`, {
       params: { page, limit },
-    });
+    })
   },
 
   /**
@@ -257,6 +274,6 @@ export const followApi = {
   getFollowers: (userId: string, page = 1, limit = 20) => {
     return api.get<PaginatedResponse<UserWithFollowCounts>>(`/users/${userId}/followers`, {
       params: { page, limit },
-    });
+    })
   },
-};
+}

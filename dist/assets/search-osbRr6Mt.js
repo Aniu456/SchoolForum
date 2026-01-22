@@ -1,0 +1,1 @@
+import{a as r}from"./index-BfFoGBGx.js";const e={searchPosts:s=>r.get("/search/posts",{params:s}),searchUsers:s=>r.get("/search/users",{params:s}),getPopularTags:(s=10)=>r.get("/search/tags/popular",{params:{limit:s}})};export{e as s};

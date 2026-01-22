@@ -11,46 +11,46 @@
  * 私信消息
  */
 export interface Message {
-  id: string;
-  content: string;
-  senderId: string;
-  receiverId: string;
-  conversationId: string;
-  isRead: boolean;
-  createdAt: string;
-  updatedAt: string;
+  id: string
+  content: string
+  senderId: string
+  conversationId: string
+  isRead: boolean
+  isDeleted: boolean
+  readAt?: string
+  createdAt: string
   sender?: {
-    id: string;
-    username: string;
-    nickname: string;
-    avatar?: string;
-  };
-  receiver?: {
-    id: string;
-    username: string;
-    nickname: string;
-    avatar?: string;
-  };
+    id: string
+    username: string
+    nickname: string
+    avatar?: string
+  }
 }
 
 /**
  * 会话
  */
 export interface Conversation {
-  id: string;
-  participants: string[];
-  lastMessage?: Message;
-  unreadCount: number;
-  createdAt: string;
-  updatedAt: string;
-  // 会话中的另一个用户信息
-  otherUser?: {
-    id: string;
-    username: string;
-    nickname: string;
-    avatar?: string;
-    isActive?: boolean;
-  };
+  id: string
+  type: "DIRECT" | "GROUP"
+  createdAt: string
+  updatedAt: string
+  participants: ConversationParticipant[]
+  messages: Message[]
+}
+
+export interface ConversationParticipant {
+  id: string
+  conversationId: string
+  userId: string
+  joinedAt: string
+  lastReadAt?: string
+  user?: {
+    id: string
+    username: string
+    nickname: string
+    avatar?: string
+  }
 }
 
 // ============================================
@@ -61,32 +61,32 @@ export interface Conversation {
  * 发送私信请求
  */
 export interface SendMessageRequest {
-  conversationId: string;
-  content: string;
+  conversationId: string
+  content: string
 }
 
 /**
  * 创建会话请求
  */
 export interface CreateConversationRequest {
-  participantId: string;
+  participantId: string
 }
 
 /**
  * 获取消息列表请求
  */
 export interface GetMessagesRequest {
-  conversationId: string;
-  page?: number;
-  limit?: number;
+  conversationId: string
+  page?: number
+  limit?: number
 }
 
 /**
  * 标记消息已读请求
  */
 export interface MarkMessagesAsReadRequest {
-  conversationId: string;
-  messageIds?: string[];
+  conversationId: string
+  messageIds?: string[]
 }
 
 // ============================================
@@ -97,25 +97,25 @@ export interface MarkMessagesAsReadRequest {
  * 会话列表响应
  */
 export interface ConversationsResponse {
-  data: Conversation[];
+  data: Conversation[]
   meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-    totalUnread: number; // 所有会话的未读消息总数
-  };
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+    totalUnread: number // 所有会话的未读消息总数
+  }
 }
 
 /**
  * 消息列表响应
  */
 export interface MessagesResponse {
-  data: Message[];
+  data: Message[]
   meta: {
-    page: number;
-    limit: number;
-    total: number;
-    totalPages: number;
-  };
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
 }

@@ -6,14 +6,24 @@
   --container-padding: 1rem;
   --breakpoint-2xl: 1280px;
 
-  /* Border radius tokens */
-  --radius-lg: 0.65rem;
-  --radius-md: calc(0.65rem - 2px);
-  --radius-sm: calc(0.65rem - 4px);
+  /* Border radius tokens - 现代化升级 */
+  --radius-sm: 0.5rem; /* 8px */
+  --radius-md: 0.75rem; /* 12px */
+  --radius-lg: 1rem; /* 16px - 卡片、容器 */
+  --radius-xl: 1.25rem; /* 20px */
+  --radius-2xl: 1.5rem; /* 24px - 大容器 */
+  --radius-3xl: 2rem; /* 32px - 突出元素 */
+
+  /* Shadow tokens - 柔和阴影系统 */
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.06);
+  --shadow-elevated: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --shadow-hover: 0 12px 40px rgba(0, 0, 0, 0.12);
+  --shadow-glass: 0 8px 32px rgba(0, 0, 0, 0.1);
 
   /* Color tokens - these create utility classes like bg-background, text-foreground, etc. */
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
+
   --color-ring: hsl(var(--ring));
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -34,13 +44,21 @@
 
   /* Animation keyframes */
   @keyframes accordion-down {
-    from { height: 0; }
-    to { height: var(--radix-accordion-content-height); }
+    from {
+      height: 0;
+    }
+    to {
+      height: var(--radix-accordion-content-height);
+    }
   }
 
   @keyframes accordion-up {
-    from { height: var(--radix-accordion-content-height); }
-    to { height: 0; }
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+    to {
+      height: 0;
+    }
   }
 
   /* Animation utilities */
@@ -103,7 +121,8 @@ body {
   background-color: hsl(var(--background));
   color: hsl(var(--foreground));
   min-height: 100vh;
-  font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -119,13 +138,21 @@ body {
 }
 
 @keyframes fade-in {
-  from { opacity: 0.5; }
-  to { opacity: 1; }
+  from {
+    opacity: 0.5;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes slide-in-from-bottom {
-  from { transform: translateY(0.5rem); }
-  to { transform: translateY(0); }
+  from {
+    transform: translateY(0.5rem);
+  }
+  to {
+    transform: translateY(0);
+  }
 }
 
 .prose {

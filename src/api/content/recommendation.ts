@@ -48,7 +48,27 @@ export const recommendationApi = {
   },
 
   /**
-   * 个性化推荐（关注关系）
+   * 获取关注用户的帖子（需要认证）
+   * GET /recommendations/following
+   */
+  getFollowingPosts: (page = 1, limit = 20) => {
+    return api.get<PaginatedResponse<Post>>('/recommendations/following', {
+      params: { page, limit },
+    });
+  },
+
+  /**
+   * 获取关注动态（别名，与 following 功能相同）
+   * GET /recommendations/following-feed
+   */
+  getFollowingFeed: (page = 1, limit = 20) => {
+    return api.get<PaginatedResponse<Post>>('/recommendations/following-feed', {
+      params: { page, limit },
+    });
+  },
+
+  /**
+   * 个性化推荐（需要认证）
    * GET /recommendations/personalized
    */
   getPersonalizedPosts: (page = 1, limit = 20) => {

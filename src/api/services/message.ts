@@ -26,7 +26,7 @@ const messageApi = {
     page?: number;
     limit?: number;
   }): Promise<ConversationsResponse> => {
-    return await api.get('/conversations', { params });
+    return await api.get<ConversationsResponse>('/conversations', { params });
   },
 
   /**
@@ -36,14 +36,14 @@ const messageApi = {
   getOrCreateConversation: async (
     data: CreateConversationRequest
   ): Promise<Conversation> => {
-    return await api.post('/conversations', data);
+    return await api.post<Conversation>('/conversations', data);
   },
 
   /**
    * 获取会话详情
    */
   getConversation: async (conversationId: string): Promise<Conversation> => {
-    return await api.get(`/conversations/${conversationId}`);
+    return await api.get<Conversation>(`/conversations/${conversationId}`);
   },
 
   // ============================================
@@ -56,7 +56,7 @@ const messageApi = {
    */
   getMessages: async (params: GetMessagesRequest): Promise<MessagesResponse> => {
     const { conversationId, ...queryParams } = params;
-    return await api.get(
+    return await api.get<MessagesResponse>(
       `/conversations/${conversationId}/messages`,
       { params: queryParams }
     );
@@ -67,7 +67,7 @@ const messageApi = {
    */
   sendMessage: async (data: SendMessageRequest): Promise<Message> => {
     const { conversationId, content } = data;
-    return await api.post(`/conversations/${conversationId}/messages`, { content });
+    return await api.post<Message>(`/conversations/${conversationId}/messages`, { content });
   },
 
   /**

@@ -101,7 +101,7 @@ export default function ModerationPage() {
                     {stripHtml(post.content)}
                   </p>
                   <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span>作者：{post.isAnonymous ? '匿名用户' : post.author?.username}</span>
+                    <span>作者：{post.isAnonymous ? '匿名用户' : (post.author?.nickname || post.author?.username)}</span>
                     <span>发布时间：{new Date(post.createdAt).toLocaleString()}</span>
                     {post.status && (
                       <span className={`rounded px-2 py-1 text-xs font-semibold ${

@@ -1,15 +1,16 @@
 "use client"
 
 import { postApi, recommendationApi, searchApi } from "@/api"
-import { Announcement, announcementApi, AnnouncementPriority } from "@/api/content/announcement"
+import { Announcement, AnnouncementType, announcementApi } from "@/api/content/announcement"
 import { Avatar, Button, EmptyState, LoadingState } from "@/components"
 import { useAuthStore } from "@/store/useAuthStore"
-import { SortType } from "@/types"
+import { Post, SortType } from "@/types"
 import { formatNumber, formatTime } from "@/utils/format"
 import { stripHtml } from "@/utils/helpers"
+import { normalizeList } from "@/utils/normalization"
 import { keepPreviousData, useQuery } from "@tanstack/react-query"
 import { ChevronLeft, ChevronRight, Clock, Eye, Flame, MessageSquare, ThumbsUp, TrendingUp } from "lucide-react"
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 
 export default function Home() {
@@ -18,9 +19,7 @@ export default function Home() {
   const [activeAnnouncement, setActiveAnnouncement] = useState(0)
   const [page, setPage] = useState(1)
   const [selectedTag, setSelectedTag] = useState<string | null>(null)
-  const [pinnedPage, setPinnedPage] = useState(1)
   const PAGE_SIZE = 20
-  const PINNED_PAGE_SIZE = 4
   const { user: currentUser } = useAuthStore()
   const listRef = useRef<HTMLDivElement | null>(null)
 
@@ -72,29 +71,10 @@ export default function Home() {
   const popularTags = Array.isArray(popularTagsData)
     ? popularTagsData
     : Array.isArray((popularTagsData as any)?.data)
-    ? (popularTagsData as any).data
-    : []
+      ? (popularTagsData as any).data
+      : []
 
   // 置顶帖子独立获取，避免随排序切换
-  const {
-    data: pinnedData,
-    isLoading: pinnedLoading,
-    error: pinnedError,
-  } = useQuery({
-    queryKey: ["posts", "pinned"],
-    queryFn: async () =>
-      postApi.getPosts({
-        page: 1,
-        limit: 200, // 拉宽范围，避免置顶不在首页时丢失
-        sortBy: "createdAt",
-        order: "desc",
-      }),
-    staleTime: 1000 * 60 * 5,
-  })
-  const pinnedFromFetch = (((pinnedData as any)?.data ?? (pinnedData as any)?.data?.data ?? []) as any[]).filter(
-    (post: any) => post.isPinned,
-  )
-
   const {
     data: postsData,
     isLoading,
@@ -122,56 +102,60 @@ export default function Home() {
     },
   })
 
-  const normalizeList = (payload: any) => {
-    const wrapper =
-      payload?.data && Array.isArray(payload.data.data)
-        ? payload.data
-        : payload?.data && Array.isArray(payload.data)
-        ? payload
-        : payload
-    return {
-      list: Array.isArray(wrapper?.data) ? wrapper.data : [],
-      meta: wrapper?.meta || wrapper?.pagination,
-    }
-  }
-
-  const { list: pagePosts, meta } = normalizeList(postsData)
+  const { list: pagePosts, meta } = normalizeList<Post>(postsData)
   const totalPages = meta?.totalPages ?? (meta?.total ? Math.ceil(meta.total / PAGE_SIZE) : 1)
 
   // 合并置顶数据，确保展示
   const pinnedPosts = useMemo(() => {
-    const combined = [...pinnedFromFetch, ...pagePosts.filter((p: any) => p.isPinned)]
-    const map = new Map<string, any>()
-    combined.forEach((p: any) => {
-      if (p?.id && p.isPinned) {
-        map.set(p.id, p)
-      }
-    })
-    return Array.from(map.values())
-  }, [pinnedFromFetch, pagePosts])
-
-  const totalPinnedPages = Math.max(1, Math.ceil((pinnedPosts.length || 0) / PINNED_PAGE_SIZE))
-  const pinnedPagePosts = pinnedPosts.slice((pinnedPage - 1) * PINNED_PAGE_SIZE, pinnedPage * PINNED_PAGE_SIZE)
+    const pinnedFromFetch = pagePosts.filter((p: Post) => p.isPinned)
+    return pinnedFromFetch
+  }, [pagePosts])
 
   // 不展示置顶在列表里
-  const normalPosts = pagePosts.filter((post: any) => !post.isPinned)
+  const normalPosts = pagePosts.filter((post: Post) => !post.isPinned)
 
-  const handleTagFilter = (tag: string | null) => {
+  const handleTagFilter = useCallback((tag: string | null) => {
     setSelectedTag(tag)
     setPage(1)
-    // 切换标签时延迟滚动，等待数据加载
     setTimeout(() => scrollToListTop(), 200)
-  }
+  }, [])
 
-  const getAuthorName = (post: any) => post?.author?.nickname || post?.author?.username || "匿名用户"
-  const getViews = (post: any) => post?.viewCount ?? post?.views ?? 0
-  const getLikes = (post: any) => post?.likeCount ?? post?.likes ?? 0
-  const getComments = (post: any) => post?.commentCount ?? post?.comments ?? 0
-  const getTags = (post: any) => (Array.isArray(post?.tags) ? post.tags : [])
-  const getPreview = (post: any) => {
+  const getAuthorName = useCallback((post: Post) => post?.author?.nickname || post?.author?.username || "匿名用户", [])
+  const getViews = useCallback((post: Post) => post?.viewCount ?? post?.views ?? 0, [])
+  const getLikes = useCallback((post: Post) => post?.likeCount ?? post?.likes ?? 0, [])
+  const getComments = useCallback((post: Post) => post?.commentCount ?? post?.comments ?? 0, [])
+  const getTags = useCallback((post: Post) => (Array.isArray(post?.tags) ? post.tags : []), [])
+  const getPreview = useCallback((post: Post) => {
     const text = stripHtml(post?.content || "")
     return text.length > 80 ? `${text.slice(0, 80)}...` : text
-  }
+  }, [])
+
+  // 公告样式函数使用useCallback优化
+  const getTypeStyle = useCallback((type: AnnouncementType) => {
+    switch (type) {
+      case "URGENT":
+        return "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200"
+      case "WARNING":
+        return "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200"
+      case "INFO":
+        return "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200"
+      default:
+        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+    }
+  }, [])
+
+  const getTypeLabel = useCallback((type: AnnouncementType) => {
+    switch (type) {
+      case "URGENT":
+        return "紧急"
+      case "WARNING":
+        return "重要"
+      case "INFO":
+        return "普通"
+      default:
+        return "公告"
+    }
+  }, [])
 
   if (isLoading) {
     return <LoadingState message="加载帖子中..." />
@@ -211,80 +195,44 @@ export default function Home() {
     )
   }
 
-  // 获取公告优先级样式
-  const getPriorityStyle = (priority: AnnouncementPriority) => {
-    switch (priority) {
-      case "URGENT":
-        return "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-200"
-      case "HIGH":
-        return "bg-orange-100 text-orange-700 dark:bg-orange-900/50 dark:text-orange-200"
-      case "NORMAL":
-        return "bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-200"
-      case "LOW":
-        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
-      default:
-        return "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-200"
-    }
-  }
-
-  // 获取公告优先级标签
-  const getPriorityLabel = (priority: AnnouncementPriority) => {
-    switch (priority) {
-      case "URGENT":
-        return "紧急"
-      case "HIGH":
-        return "重要"
-      case "NORMAL":
-        return "普通"
-      case "LOW":
-        return "一般"
-      default:
-        return "公告"
-    }
-  }
-
   return (
     <div className="bg-[#F6F8FB]">
       <div className="mx-auto max-w-7xl space-y-8 px-4 py-8 sm:px-6 lg:px-8">
         {announcements.length > 0 && (
-          <section className="overflow-hidden rounded-3xl border border-blue-100 bg-linear-to-r from-blue-50 via-sky-50 to-indigo-50 shadow-sm">
+          <section className="overflow-hidden rounded-2xl bg-white">
             {(() => {
               const current = (announcements[activeAnnouncement] as Announcement) || (announcements[0] as Announcement)
               return (
                 <div className="flex flex-col gap-4 p-6 sm:p-8">
                   <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-3 text-sm font-semibold text-blue-700">
-                      <span className="flex items-center gap-2 rounded-full bg-white px-3 py-1 text-blue-600 shadow-sm">
-                        📢 公告
-                        <span className="text-xs text-gray-400">
+                      <span className="flex items-center gap-2">
+                        <span className="text-xl">📢</span>
+                        <span className="text-xs text-gray-400 font-normal">
                           {activeAnnouncement + 1}/{announcements.length}
                         </span>
                       </span>
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${getPriorityStyle(current.priority)}`}
-                      >
-                        {getPriorityLabel(current.priority)}
+                      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getTypeStyle(current.type)}`}>
+                        {getTypeLabel(current.type)}
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-sm text-gray-600 shadow-sm transition hover:-translate-x-0.5 hover:bg-gray-50"
+                        className="flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 text-sm text-gray-600 shadow-sm transition hover:-translate-x-0.5 hover:bg-white"
                         onClick={() =>
                           setActiveAnnouncement((prev) => (prev - 1 + announcements.length) % announcements.length)
                         }
                         aria-label="上一条公告"
                       >
                         <ChevronLeft className="h-4 w-4" />
-                        上一条
                       </button>
                       <button
                         type="button"
-                        className="flex items-center gap-1 rounded-full bg-white px-3 py-1 text-sm text-gray-600 shadow-sm transition hover:translate-x-0.5 hover:bg-gray-50"
+                        className="flex items-center gap-1 rounded-full bg-white/80 px-3 py-1 text-sm text-gray-600 shadow-sm transition hover:translate-x-0.5 hover:bg-white"
                         onClick={() => setActiveAnnouncement((prev) => (prev + 1) % announcements.length)}
                         aria-label="下一条公告"
                       >
-                        下一条
                         <ChevronRight className="h-4 w-4" />
                       </button>
                     </div>
@@ -293,17 +241,15 @@ export default function Home() {
                   <button
                     type="button"
                     onClick={() => navigate(`/announcements/${current.id}`)}
-                    className="rounded-2xl bg-white/80 p-5 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                    className="group text-left transition"
                   >
-                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <h3 className="text-xl font-bold text-gray-900">{current.title}</h3>
-                        <p className="mt-2 line-clamp-2 text-sm text-gray-600">{current.content}</p>
-                      </div>
-                      <div className="text-right text-xs text-gray-500">
-                        <div>{current.author?.nickname || "系统公告"}</div>
-                        <div>{new Date(current.createdAt).toLocaleDateString()}</div>
-                      </div>
+                    <h3 className="text-xl font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {current.title}
+                    </h3>
+                    <p className="mt-2 line-clamp-2 text-sm text-gray-600">{current.content}</p>
+                    <div className="mt-3 text-xs text-gray-400">
+                      {current.author?.nickname || "管理员"} ·{" "}
+                      {current.createdAt ? new Date(current.createdAt).toLocaleDateString() : "未知时间"}
                     </div>
                   </button>
                 </div>
@@ -329,16 +275,10 @@ export default function Home() {
             )}
           </div>
 
-          {pinnedLoading ? (
-            <LoadingState message="加载置顶帖子..." />
-          ) : pinnedError ? (
-            <div className="rounded-lg border border-dashed border-red-200 bg-white px-6 py-4 text-sm text-red-600">
-              置顶帖子加载失败
-            </div>
-          ) : pinnedPosts.length > 0 ? (
+          {pinnedPosts.length > 0 ? (
             <>
               <div className="grid gap-4 md:grid-cols-2">
-                {pinnedPagePosts.map((post) => (
+                {pinnedPosts.map((post: Post) => (
                   <Link
                     key={post.id}
                     to={`/posts/${post.id}`}
@@ -390,31 +330,6 @@ export default function Home() {
                   </Link>
                 ))}
               </div>
-              {totalPinnedPages > 1 && (
-                <div className="flex items-center justify-end gap-2 text-sm text-gray-500">
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 rounded-full bg-white px-3 py-1 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={pinnedPage <= 1}
-                    onClick={() => setPinnedPage((p) => Math.max(1, p - 1))}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                    上一页
-                  </button>
-                  <span className="rounded-full bg-gray-100 px-3 py-1 text-xs">
-                    {pinnedPage}/{totalPinnedPages}
-                  </span>
-                  <button
-                    type="button"
-                    className="flex items-center gap-1 rounded-full bg-white px-3 py-1 shadow-sm transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
-                    disabled={pinnedPage >= totalPinnedPages}
-                    onClick={() => setPinnedPage((p) => Math.min(totalPinnedPages, p + 1))}
-                  >
-                    下一页
-                    <ChevronRight className="h-4 w-4" />
-                  </button>
-                </div>
-              )}
             </>
           ) : (
             <div className="rounded-2xl border border-dashed border-gray-200 bg-white px-6 py-5 text-sm text-gray-500">
@@ -426,10 +341,9 @@ export default function Home() {
         <section className="grid gap-6 lg:grid-cols-[2fr_1fr]">
           <div className="space-y-4">
             <div ref={listRef} className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm">
-              {/* 顶部分类 & 排序 Tabs */}
+              {/* 论坛子分类 & 排序 Tabs */}
               <div className="flex items-center justify-between gap-4 px-6 py-3">
-                {/* 标签导航（固定分类） */}
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-6 overflow-x-auto no-scrollbar">
                   {[
                     { key: null as string | null, label: "全部" },
                     { key: "学习交流" as string | null, label: "学习交流" },
@@ -441,10 +355,10 @@ export default function Home() {
                       key={tab.label}
                       type="button"
                       onClick={() => handleTagFilter(tab.key)}
-                      className={`px-4 py-2 text-sm font-medium transition rounded-full ${
+                      className={`relative px-1 py-3 text-sm font-medium transition-colors ${
                         (!selectedTag && tab.key === null) || selectedTag === tab.key
-                          ? "bg-blue-50 text-blue-600"
-                          : "text-gray-700 hover:bg-gray-50"
+                          ? "text-blue-600 after:absolute after:bottom-0 after:left-0 after:h-0.5 after:w-full after:bg-blue-600 after:rounded-full"
+                          : "text-gray-500 hover:text-gray-900"
                       }`}
                     >
                       {tab.label}
@@ -466,7 +380,6 @@ export default function Home() {
                         onClick={() => {
                           setSortBy(option.key as SortType)
                           setPage(1)
-                          // 切换排序时延迟滚动，等待数据加载
                           setTimeout(() => scrollToListTop(), 200)
                         }}
                         className={`rounded-full px-4 py-1.5 text-sm font-medium transition ${

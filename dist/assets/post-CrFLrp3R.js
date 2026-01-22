@@ -1,0 +1,1 @@
+import{a as s}from"./index-BfFoGBGx.js";const r={createPost:t=>s.post("/posts",t),getPosts:t=>s.get("/posts",{params:t}),getPost:t=>s.get(`/posts/${t}`),getPostComments:(t,e)=>s.get(`/posts/${t}/comments`,{params:e}),updatePost:(t,e)=>s.patch(`/posts/${t}`,e),deletePost:t=>s.delete(`/posts/${t}`)};export{r as p};

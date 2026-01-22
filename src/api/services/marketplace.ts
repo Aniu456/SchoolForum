@@ -1,102 +1,128 @@
-/**
- * 二手交易市场 API
- */
-import { api } from '../core/client';
-import type {
-  MarketplaceItem,
-  CreateMarketplaceItemRequest,
-  UpdateMarketplaceItemRequest,
-  MarketplaceQueryParams,
-  PaginatedResponse,
-} from '@/types';
+import { api } from "../core/client"
 
 /**
- * 获取商品列表
+ * 二手商品类型
  */
-export const getMarketplaceItems = async (params?: MarketplaceQueryParams): Promise<PaginatedResponse<MarketplaceItem>> => {
-  return await api.get('/secondhand', { params });
-};
+export interface SecondhandItem {
+  id: string
+  title: string
+  description: string
+  price: number
+  category: string
+  images: string[]
+  condition: "new" | "like_new" | "good" | "fair"
+  location?: string
+  status: "available" | "sold" | "reserved"
+  contactInfo: string
+  authorId: string
+  author?: {
+    id: string
+    username: string
+    nickname: string
+    avatar: string
+  }
+  createdAt: string
+  updatedAt: string
+  viewCount?: number
+}
 
 /**
- * 获取商品详情
+ * 创建二手商品DTO
  */
-export const getMarketplaceItem = async (id: string): Promise<MarketplaceItem> => {
-  return await api.get(`/secondhand/${id}`);
-};
+export interface CreateSecondhandDto {
+  title: string
+  description: string
+  price: number
+  category: string
+  images?: string[]
+  condition?: "new" | "like_new" | "good" | "fair"
+  location?: string
+  contactInfo: string
+}
 
 /**
- * 创建商品
+ * 更新二手商品DTO
  */
-export const createMarketplaceItem = async (data: CreateMarketplaceItemRequest): Promise<MarketplaceItem> => {
-  return await api.post('/secondhand', data);
-};
+export interface UpdateSecondhandDto {
+  title?: string
+  description?: string
+  price?: number
+  category?: string
+  images?: string[]
+  condition?: "new" | "like_new" | "good" | "fair"
+  location?: string
+  contactInfo?: string
+  status?: "available" | "sold" | "reserved"
+}
 
 /**
- * 更新商品
+ * 列表响应
  */
-export const updateMarketplaceItem = async (id: string, data: UpdateMarketplaceItemRequest): Promise<MarketplaceItem> => {
-  return await api.put(`/secondhand/${id}`, data);
-};
+export interface SecondhandListResponse {
+  data: SecondhandItem[]
+  meta: {
+    page: number
+    limit: number
+    total: number
+    totalPages: number
+  }
+}
 
 /**
- * 删除商品
+ * 二手市场API
  */
-export const deleteMarketplaceItem = async (id: string): Promise<void> => {
-  await api.delete(`/secondhand/${id}`);
-};
+export const secondhandApi = {
+  /**
+   * 创建商品
+   */
+  create: async (data: CreateSecondhandDto): Promise<SecondhandItem> => {
+    return await api.post<SecondhandItem>("/secondhand", data)
+  },
 
-/**
- * 获取我的商品
- */
-export const getMyMarketplaceItems = async (params?: MarketplaceQueryParams): Promise<PaginatedResponse<MarketplaceItem>> => {
-  return await api.get('/secondhand/my', { params });
-};
+  /**
+   * 获取商品列表
+   */
+  findAll: async (
+    page = 1,
+    limit = 20,
+    category?: string,
+    status?: string
+  ): Promise<SecondhandListResponse> => {
+    return await api.get<SecondhandListResponse>("/secondhand", {
+      params: { page, limit, category, status },
+    })
+  },
 
-/**
- * 搜索商品
- */
-export const searchMarketplaceItems = async (params: MarketplaceQueryParams): Promise<PaginatedResponse<MarketplaceItem>> => {
-  return await api.get('/secondhand/search', { params });
-};
+  /**
+   * 获取商品详情
+   */
+  findOne: async (id: string): Promise<SecondhandItem> => {
+    return await api.get<SecondhandItem>(`/secondhand/${id}`)
+  },
 
-/**
- * 收藏商品
- */
-export const favoriteMarketplaceItem = async (id: string): Promise<void> => {
-  await api.post(`/secondhand/${id}/favorite`);
-};
+  /**
+   * 更新商品
+   */
+  update: async (
+    id: string,
+    data: UpdateSecondhandDto
+  ): Promise<SecondhandItem> => {
+    return await api.patch<SecondhandItem>(`/secondhand/${id}`, data)
+  },
 
-/**
- * 取消收藏商品
- */
-export const unfavoriteMarketplaceItem = async (id: string): Promise<void> => {
-  await api.delete(`/secondhand/${id}/favorite`);
-};
+  /**
+   * 删除商品
+   */
+  remove: async (id: string): Promise<{ message: string }> => {
+    return await api.delete<{ message: string }>(`/secondhand/${id}`)
+  },
 
-/**
- * 标记商品为已售出
- */
-export const markAsSold = async (id: string): Promise<MarketplaceItem> => {
-  return await api.post(`/secondhand/${id}/sold`);
-};
+  /**
+   * 别名方法，保持一致性
+   */
+  delete: async (id: string): Promise<{ message: string }> => {
+    return await api.delete<{ message: string }>(`/secondhand/${id}`)
+  },
+}
 
-/**
- * 标记商品为已预定
- */
-export const markAsReserved = async (id: string): Promise<MarketplaceItem> => {
-  return await api.post(`/secondhand/${id}/reserved`);
-};
-
-export default {
-  getMarketplaceItems,
-  getMarketplaceItem,
-  createMarketplaceItem,
-  updateMarketplaceItem,
-  deleteMarketplaceItem,
-  getMyMarketplaceItems,
-  searchMarketplaceItems,
-  favoriteMarketplaceItem,
-  unfavoriteMarketplaceItem,
-  markAsSold,
-  markAsReserved,
-};
+export default secondhandApi

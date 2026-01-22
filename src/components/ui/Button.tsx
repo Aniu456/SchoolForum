@@ -7,19 +7,19 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/helpers';
 
 const buttonVariants = cva(
-  'inline-flex items-center justify-center rounded-lg font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:focus:ring-offset-gray-900',
+  'inline-flex items-center justify-center rounded-xl font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none dark:focus:ring-offset-gray-900 hover:-translate-y-0.5 active:translate-y-0',
   {
     variants: {
       variant: {
-        primary: 'bg-blue-600 text-white hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600',
-        secondary: 'bg-gray-600 text-white hover:bg-gray-700 dark:bg-gray-500 dark:hover:bg-gray-600',
-        success: 'bg-green-600 text-white hover:bg-green-700 dark:bg-green-500 dark:hover:bg-green-600',
-        danger: 'bg-red-600 text-white hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600',
-        warning: 'bg-yellow-500 text-white hover:bg-yellow-600 dark:bg-yellow-400 dark:hover:bg-yellow-500',
+        primary: 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm hover:shadow-md dark:bg-blue-500 dark:hover:bg-blue-600',
+        secondary: 'bg-gray-600 text-white hover:bg-gray-700 shadow-sm hover:shadow-md dark:bg-gray-500 dark:hover:bg-gray-600',
+        success: 'bg-green-600 text-white hover:bg-green-700 shadow-sm hover:shadow-md dark:bg-green-500 dark:hover:bg-green-600',
+        danger: 'bg-red-600 text-white hover:bg-red-700 shadow-sm hover:shadow-md dark:bg-red-500 dark:hover:bg-red-600',
+        warning: 'bg-yellow-500 text-white hover:bg-yellow-600 shadow-sm hover:shadow-md dark:bg-yellow-400 dark:hover:bg-yellow-500',
         outline:
-          'border-2 border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800',
+          'border-2 border-gray-300 bg-transparent text-gray-700 hover:bg-gray-50 hover:border-gray-400 dark:border-gray-700 dark:text-gray-300 dark:hover:bg-gray-800',
         ghost: 'bg-transparent text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-800',
-        link: 'bg-transparent text-blue-600 underline-offset-4 hover:underline dark:text-blue-400',
+        link: 'bg-transparent text-blue-600 underline-offset-4 hover:underline dark:text-blue-400 hover:translate-y-0',
       },
       size: {
         sm: 'h-9 px-3 text-sm',
@@ -37,6 +37,7 @@ const buttonVariants = cva(
     },
   }
 );
+
 
 export interface ButtonProps
   extends ButtonHTMLAttributes<HTMLButtonElement>,

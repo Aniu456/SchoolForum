@@ -1,26 +1,28 @@
 import { api, PaginatedResponse } from '../core/client';
 
 /**
- * 公告优先级
+ * 公告类型
  */
-export type AnnouncementPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type AnnouncementType = 'INFO' | 'WARNING' | 'URGENT';
 
 /**
- * 公告类型
+ * 公告
  */
 export interface Announcement {
   id: string;
   title: string;
   content: string;
-  priority: AnnouncementPriority;
+  type: AnnouncementType;
+  isPinned: boolean;
+  publishedAt: string;
   author: {
     id: string;
     username: string;
     nickname: string;
     avatar?: string;
   };
-  createdAt: string;
-  updatedAt: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 /**
@@ -32,7 +34,20 @@ export interface AnnouncementListParams {
 }
 
 /**
+ * 创建公告请求（仅管理员）
+ */
+export interface CreateAnnouncementDto {
+  title: string;
+  content: string;
+  type: AnnouncementType;
+  targetRole?: 'USER' | 'ADMIN';
+  isPinned?: boolean;
+  isPublished?: boolean;
+}
+
+/**
  * 公告相关 API（模块：Announcements）
+ * 注：管理员专用接口在单独的管理后台系统中实现
  */
 export const announcementApi = {
   /**

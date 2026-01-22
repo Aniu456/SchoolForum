@@ -1,0 +1,485 @@
+校园论坛系统 - 数据库设计图
+
+═══════════════════════════════════════════════════════════════════════════════
+1. 数据库ER图 (实体关系图)
+═══════════════════════════════════════════════════════════════════════════════
+
+                            ┌─────────────────┐
+                            │     用户表       │
+                            │    (users)      │
+                            ├─────────────────┤
+                            │ id (PK)         │
+                            │ username        │
+                            │ email           │
+                            │ password_hash   │
+                            │ avatar          │
+                            │ bio             │
+                            │ role            │
+                            │ status          │
+                            │ created_at      │
+                            │ updated_at      │
+                            └────┬────────────┘
+                                 │
+                ┌────────────────┼────────────────┐
+                │                │                │
+                │ 1              │                │ 1
+                │                │                │
+                │ *              │ *              │ *
+        ┌───────┴────────┐ ┌────┴────────┐ ┌────┴────────┐
+        │   帖子表        │ │  评论表      │ │  私信表      │
+        │   (posts)       │ │ (comments)   │ │ (messages)  │
+        ├────────────────┤ ├─────────────┤ ├─────────────┤
+        │ id (PK)        │ │ id (PK)     │ │ id (PK)     │
+        │ user_id (FK)   │ │ user_id(FK) │ │ sender_id(FK)│
+        │ title          │ │ post_id(FK) │ │receiver_id(FK)│
+        │ content        │ │ parent_id   │ │conversation_id│
+        │ category       │ │ content     │ │ content     │
+        │ tags           │ │ created_at  │ │ is_read     │
+        │ status         │ │ updated_at  │ │ created_at  │
+        │ view_count     │ └─────────────┘ └─────────────┘
+        │ like_count     │        │
+        │ comment_count  │        │ *
+        │ created_at     │        │
+        │ updated_at     │        │ 1
+        └────┬───────────┘        │
+             │                    │
+             │ 1          ┌───────┴────────┐
+             │            │   评论回复表    │
+             │            │   (自关联)     │
+             │ *          └────────────────┘
+             │
+    ┌────────┼────────┬─────────────┐
+    │        │        │             │
+┌───┴────┐ ┌─┴────┐ ┌─┴───────┐ ┌──┴──────┐
+│草稿表  │ │点赞表│ │ 收藏表   │ │ 附件表   │
+│(drafts)│ │(likes)│ │(favorites)│ │(uploads)│
+├────────┤ ├──────┤ ├──────────┤ ├─────────┤
+│id (PK) │ │id(PK)│ │ id (PK)  │ │ id (PK) │
+│user_id │ │user_id│ │ user_id  │ │post_id  │
+│title   │ │post_id│ │ post_id  │ │file_url │
+│content │ │created│ │created_at│ │file_type│
+│updated │ └──────┘ └──────────┘ │file_size│
+└────────┘                       │created  │
+                                 └─────────┘
+
+        ┌─────────────────────────────────────────────┐
+        │                  社交关系表                  │
+        └─────────────────────────────────────────────┘
+                │                           │
+        ┌───────┴────────┐         ┌───────┴────────┐
+        │   关注表        │         │   通知表        │
+        │  (follows)      │         │(notifications) │
+        ├────────────────┤         ├────────────────┤
+        │ id (PK)        │         │ id (PK)        │
+        │ follower_id(FK)│         │ user_id (FK)   │
+        │ following_id   │         │ type           │
+        │ created_at     │         │ title          │
+        └────────────────┘         │ content        │
+                                   │ related_id     │
+                                   │ sender_id      │
+                                   │ is_read        │
+                                   │ created_at     │
+                                   └────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+2. 核心数据表结构
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  1. 用户表 (users)                                                           │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  用户ID (主键,自增)         │
+│  username        │  VARCHAR(50)   │  UNIQUE    │  用户名 (唯一)              │
+│  email           │  VARCHAR(100)  │  UNIQUE    │  邮箱 (唯一)                │
+│  password_hash   │  VARCHAR(255)  │  NOT NULL  │  密码哈希                   │
+│  avatar          │  VARCHAR(500)  │  NULL      │  头像URL                    │
+│  bio             │  TEXT          │  NULL      │  个人简介                   │
+│  role            │  ENUM          │  DEFAULT   │  角色 (user/admin/moderator)│
+│  status          │  ENUM          │  DEFAULT   │  状态 (active/banned)       │
+│  points          │  INT           │  DEFAULT 0 │  积分                       │
+│  followers_count │  INT           │  DEFAULT 0 │  粉丝数                     │
+│  following_count │  INT           │  DEFAULT 0 │  关注数                     │
+│  posts_count     │  INT           │  DEFAULT 0 │  帖子数                     │
+│  email_verified  │  BOOLEAN       │  DEFAULT 0 │  邮箱是否验证               │
+│  last_login_at   │  DATETIME      │  NULL      │  最后登录时间               │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  创建时间                   │
+│  updated_at      │  TIMESTAMP     │  ON UPDATE │  更新时间                   │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  2. 帖子表 (posts)                                                           │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  帖子ID (主键,自增)         │
+│  user_id         │  INT           │  FK        │  作者ID (外键→users.id)     │
+│  title           │  VARCHAR(200)  │  NOT NULL  │  帖子标题                   │
+│  content         │  TEXT          │  NOT NULL  │  帖子内容                   │
+│  content_html    │  TEXT          │  NULL      │  HTML格式内容               │
+│  category        │  VARCHAR(50)   │  NULL      │  分类                       │
+│  tags            │  JSON          │  NULL      │  标签数组                   │
+│  status          │  ENUM          │  DEFAULT   │  状态(draft/published/      │
+│                  │                │            │      deleted/hidden)        │
+│  is_pinned       │  BOOLEAN       │  DEFAULT 0 │  是否置顶                   │
+│  is_featured     │  BOOLEAN       │  DEFAULT 0 │  是否加精                   │
+│  view_count      │  INT           │  DEFAULT 0 │  浏览次数                   │
+│  like_count      │  INT           │  DEFAULT 0 │  点赞数                     │
+│  favorite_count  │  INT           │  DEFAULT 0 │  收藏数                     │
+│  comment_count   │  INT           │  DEFAULT 0 │  评论数                     │
+│  share_count     │  INT           │  DEFAULT 0 │  分享数                     │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  创建时间                   │
+│  updated_at      │  TIMESTAMP     │  ON UPDATE │  更新时间                   │
+│  published_at    │  DATETIME      │  NULL      │  发布时间                   │
+│  deleted_at      │  DATETIME      │  NULL      │  删除时间(软删除)           │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  3. 评论表 (comments)                                                        │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  评论ID (主键,自增)         │
+│  user_id         │  INT           │  FK        │  评论者ID (外键→users.id)   │
+│  post_id         │  INT           │  FK        │  帖子ID (外键→posts.id)     │
+│  parent_id       │  INT           │  NULL      │  父评论ID (自关联)          │
+│  content         │  TEXT          │  NOT NULL  │  评论内容                   │
+│  like_count      │  INT           │  DEFAULT 0 │  点赞数                     │
+│  reply_count     │  INT           │  DEFAULT 0 │  回复数                     │
+│  status          │  ENUM          │  DEFAULT   │  状态(normal/deleted/hidden)│
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  创建时间                   │
+│  updated_at      │  TIMESTAMP     │  ON UPDATE │  更新时间                   │
+│  deleted_at      │  DATETIME      │  NULL      │  删除时间(软删除)           │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  4. 私信表 (messages)                                                        │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  消息ID (主键,自增)         │
+│  conversation_id │  VARCHAR(100)  │  INDEX     │  会话ID                     │
+│  sender_id       │  INT           │  FK        │  发送者ID (外键→users.id)   │
+│  receiver_id     │  INT           │  FK        │  接收者ID (外键→users.id)   │
+│  content         │  TEXT          │  NOT NULL  │  消息内容                   │
+│  is_read         │  BOOLEAN       │  DEFAULT 0 │  是否已读                   │
+│  read_at         │  DATETIME      │  NULL      │  阅读时间                   │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  发送时间                   │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  5. 通知表 (notifications)                                                   │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  通知ID (主键,自增)         │
+│  user_id         │  INT           │  FK        │  接收者ID (外键→users.id)   │
+│  sender_id       │  INT           │  FK        │  发送者ID (外键→users.id)   │
+│  type            │  ENUM          │  NOT NULL  │  类型(LIKE/COMMENT/REPLY/   │
+│                  │                │            │      NEW_FOLLOWER/SYSTEM)   │
+│  title           │  VARCHAR(200)  │  NOT NULL  │  通知标题                   │
+│  content         │  TEXT          │  NULL      │  通知内容                   │
+│  related_id      │  INT           │  NULL      │  关联ID(帖子/评论ID)        │
+│  related_type    │  VARCHAR(50)   │  NULL      │  关联类型                   │
+│  link            │  VARCHAR(500)  │  NULL      │  跳转链接                   │
+│  is_read         │  BOOLEAN       │  DEFAULT 0 │  是否已读                   │
+│  read_at         │  DATETIME      │  NULL      │  阅读时间                   │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  创建时间                   │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  6. 点赞表 (likes)                                                           │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  点赞ID (主键,自增)         │
+│  user_id         │  INT           │  FK        │  用户ID (外键→users.id)     │
+│  target_id       │  INT           │  NOT NULL  │  目标ID(帖子/评论ID)        │
+│  target_type     │  ENUM          │  NOT NULL  │  目标类型(post/comment)     │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  点赞时间                   │
+├──────────────────┴────────────────┴────────────┴─────────────────────────────┤
+│  UNIQUE KEY: (user_id, target_id, target_type)  防止重复点赞                 │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  7. 收藏表 (favorites)                                                       │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  收藏ID (主键,自增)         │
+│  user_id         │  INT           │  FK        │  用户ID (外键→users.id)     │
+│  post_id         │  INT           │  FK        │  帖子ID (外键→posts.id)     │
+│  folder_id       │  INT           │  NULL      │  收藏夹ID                   │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  收藏时间                   │
+├──────────────────┴────────────────┴────────────┴─────────────────────────────┤
+│  UNIQUE KEY: (user_id, post_id)  防止重复收藏                                │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  8. 关注表 (follows)                                                         │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  关注ID (主键,自增)         │
+│  follower_id     │  INT           │  FK        │  关注者ID (外键→users.id)   │
+│  following_id    │  INT           │  FK        │  被关注者ID(外键→users.id)  │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  关注时间                   │
+├──────────────────┴────────────────┴────────────┴─────────────────────────────┤
+│  UNIQUE KEY: (follower_id, following_id)  防止重复关注                       │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  9. 草稿表 (drafts)                                                          │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  草稿ID (主键,自增)         │
+│  user_id         │  INT           │  FK        │  作者ID (外键→users.id)     │
+│  title           │  VARCHAR(200)  │  NULL      │  草稿标题                   │
+│  content         │  TEXT          │  NULL      │  草稿内容                   │
+│  category        │  VARCHAR(50)   │  NULL      │  分类                       │
+│  tags            │  JSON          │  NULL      │  标签数组                   │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  创建时间                   │
+│  updated_at      │  TIMESTAMP     │  ON UPDATE │  更新时间                   │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  10. 系统公告表 (announcements)                                              │
+├──────────────────┬────────────────┬────────────┬─────────────────────────────┤
+│  字段名          │  数据类型       │  约束      │  说明                       │
+├──────────────────┼────────────────┼────────────┼─────────────────────────────┤
+│  id              │  INT           │  PK, AI    │  公告ID (主键,自增)         │
+│  title           │  VARCHAR(200)  │  NOT NULL  │  公告标题                   │
+│  content         │  TEXT          │  NOT NULL  │  公告内容                   │
+│  type            │  ENUM          │  DEFAULT   │  类型(info/warning/urgent)  │
+│  status          │  ENUM          │  DEFAULT   │  状态(draft/published)      │
+│  priority        │  INT           │  DEFAULT 0 │  优先级                     │
+│  created_by      │  INT           │  FK        │  创建者ID (外键→users.id)   │
+│  created_at      │  TIMESTAMP     │  DEFAULT   │  创建时间                   │
+│  published_at    │  DATETIME      │  NULL      │  发布时间                   │
+└──────────────────┴────────────────┴────────────┴─────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+3. 数据库索引设计
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  索引优化策略                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  用户表 (users):                                                            │
+│    • PRIMARY KEY (id)                                                       │
+│    • UNIQUE INDEX idx_username (username)                                   │
+│    • UNIQUE INDEX idx_email (email)                                         │
+│    • INDEX idx_status (status)                                              │
+│    • INDEX idx_created_at (created_at)                                      │
+│                                                                             │
+│  帖子表 (posts):                                                            │
+│    • PRIMARY KEY (id)                                                       │
+│    • INDEX idx_user_id (user_id)                                            │
+│    • INDEX idx_category (category)                                          │
+│    • INDEX idx_status (status)                                              │
+│    • INDEX idx_created_at (created_at DESC)                                 │
+│    • INDEX idx_hot (like_count, comment_count, created_at)  # 热门排序      │
+│    • FULLTEXT INDEX ft_title_content (title, content)  # 全文搜索           │
+│                                                                             │
+│  评论表 (comments):                                                         │
+│    • PRIMARY KEY (id)                                                       │
+│    • INDEX idx_post_id (post_id)                                            │
+│    • INDEX idx_user_id (user_id)                                            │
+│    • INDEX idx_parent_id (parent_id)                                        │
+│    • INDEX idx_created_at (created_at)                                      │
+│                                                                             │
+│  私信表 (messages):                                                         │
+│    • PRIMARY KEY (id)                                                       │
+│    • INDEX idx_conversation_id (conversation_id)                            │
+│    • INDEX idx_sender_id (sender_id)                                        │
+│    • INDEX idx_receiver_id (receiver_id)                                    │
+│    • INDEX idx_is_read (is_read)                                            │
+│    • INDEX idx_created_at (created_at DESC)                                 │
+│                                                                             │
+│  通知表 (notifications):                                                    │
+│    • PRIMARY KEY (id)                                                       │
+│    • INDEX idx_user_id (user_id)                                            │
+│    • INDEX idx_is_read (is_read)                                            │
+│    • INDEX idx_created_at (created_at DESC)                                 │
+│    • INDEX idx_type (type)                                                  │
+│                                                                             │
+│  点赞表 (likes):                                                            │
+│    • PRIMARY KEY (id)                                                       │
+│    • UNIQUE INDEX idx_user_target (user_id, target_id, target_type)        │
+│    • INDEX idx_target (target_id, target_type)                              │
+│                                                                             │
+│  收藏表 (favorites):                                                        │
+│    • PRIMARY KEY (id)                                                       │
+│    • UNIQUE INDEX idx_user_post (user_id, post_id)                          │
+│    • INDEX idx_post_id (post_id)                                            │
+│                                                                             │
+│  关注表 (follows):                                                          │
+│    • PRIMARY KEY (id)                                                       │
+│    • UNIQUE INDEX idx_follow (follower_id, following_id)                    │
+│    • INDEX idx_following (following_id)                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+
+
+═══════════════════════════════════════════════════════════════════════════════
+4. 数据库关系图
+═══════════════════════════════════════════════════════════════════════════════
+
+                            用户 (users)
+                                 │
+                                 │ 1
+                ┌────────────────┼────────────────┬──────────────┐
+                │                │                │              │
+                │ *              │ *              │ *            │ *
+                │                │                │              │
+            帖子(posts)      评论(comments)   私信(messages)  草稿(drafts)
+                │                │                │
+                │                │ *              │
+                │ *              │                │
+                │                │ 1              │
+        ┌───────┼────────┐       │                │
+        │       │        │       │                │
+        │ *     │ *      │ *     │ *              │ *
+        │       │        │       │                │
+   点赞(likes) 收藏     附件     评论回复       对话列表
+              (favorites)(uploads)(parent_id)  (conversations)
+
+
+        用户关注关系 (follows)              通知系统 (notifications)
+             用户 1:N 用户                     用户 1:N 通知
+        (follower/following)                (接收者/发送者)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+5. 常用查询示例
+═══════════════════════════════════════════════════════════════════════════════
+
+-- 1. 获取用户的帖子列表（带分页）
+SELECT p.*, u.username, u.avatar
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.user_id = ? AND p.status = 'published'
+ORDER BY p.created_at DESC
+LIMIT 20 OFFSET 0;
+
+-- 2. 获取帖子详情及作者信息
+SELECT p.*, u.username, u.avatar, u.bio,
+       (SELECT COUNT(*) FROM likes WHERE target_id = p.id AND target_type = 'post') as like_count,
+       (SELECT COUNT(*) FROM favorites WHERE post_id = p.id) as favorite_count,
+       (SELECT COUNT(*) FROM comments WHERE post_id = p.id) as comment_count
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.id = ?;
+
+-- 3. 获取帖子的评论列表（带回复）
+SELECT c.*, u.username, u.avatar,
+       COALESCE((SELECT COUNT(*) FROM comments WHERE parent_id = c.id), 0) as reply_count
+FROM comments c
+JOIN users u ON c.user_id = u.id
+WHERE c.post_id = ? AND c.parent_id IS NULL AND c.status = 'normal'
+ORDER BY c.created_at DESC;
+
+-- 4. 获取用户的未读通知数
+SELECT COUNT(*) as unread_count
+FROM notifications
+WHERE user_id = ? AND is_read = 0;
+
+-- 5. 获取用户的关注列表
+SELECT u.id, u.username, u.avatar, u.bio, f.created_at
+FROM follows f
+JOIN users u ON f.following_id = u.id
+WHERE f.follower_id = ?
+ORDER BY f.created_at DESC;
+
+-- 6. 获取热门帖子（按点赞和评论数排序）
+SELECT p.*, u.username, u.avatar,
+       (p.like_count * 2 + p.comment_count * 3) as hot_score
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.status = 'published'
+  AND p.created_at > DATE_SUB(NOW(), INTERVAL 7 DAY)
+ORDER BY hot_score DESC
+LIMIT 20;
+
+-- 7. 搜索帖子（全文搜索）
+SELECT p.*, u.username, u.avatar,
+       MATCH(p.title, p.content) AGAINST(? IN NATURAL LANGUAGE MODE) as relevance
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE MATCH(p.title, p.content) AGAINST(? IN NATURAL LANGUAGE MODE)
+  AND p.status = 'published'
+ORDER BY relevance DESC, p.created_at DESC
+LIMIT 20;
+
+-- 8. 获取用户的私信对话列表
+SELECT 
+    CASE 
+        WHEN sender_id = ? THEN receiver_id 
+        ELSE sender_id 
+    END as other_user_id,
+    u.username, u.avatar,
+    m.content as last_message,
+    m.created_at as last_message_time,
+    (SELECT COUNT(*) FROM messages 
+     WHERE conversation_id = m.conversation_id 
+       AND receiver_id = ? 
+       AND is_read = 0) as unread_count
+FROM messages m
+JOIN users u ON u.id = CASE 
+    WHEN m.sender_id = ? THEN m.receiver_id 
+    ELSE m.sender_id 
+END
+WHERE m.conversation_id IN (
+    SELECT DISTINCT conversation_id 
+    FROM messages 
+    WHERE sender_id = ? OR receiver_id = ?
+)
+GROUP BY m.conversation_id
+ORDER BY m.created_at DESC;
+
+
+═══════════════════════════════════════════════════════════════════════════════
+6. 数据库性能优化建议
+═══════════════════════════════════════════════════════════════════════════════
+
+┌─────────────────────────────────────────────────────────────────────────────┐
+│  性能优化策略                                                                │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  1. 索引优化                                                                │
+│     • 为常用查询字段添加索引                                                │
+│     • 避免在小表上建立过多索引                                              │
+│     • 定期分析和优化索引使用情况                                            │
+│                                                                             │
+│  2. 分表分库                                                                │
+│     • 历史数据归档（超过1年的帖子）                                         │
+│     • 按用户ID进行分表（当用户量超过1000万）                                │
+│     • 消息表按时间分表（每月一张表）                                        │
+│                                                                             │
+│  3. 缓存策略                                                                │
+│     • 热门帖子缓存到Redis（TTL 10分钟）                                     │
+│     • 用户信息缓存（TTL 30分钟）                                            │
+│     • 帖子列表缓存（TTL 5分钟）                                             │
+│     • 统计数据缓存（点赞数、评论数等，TTL 1分钟）                           │
+│                                                                             │
+│  4. 读写分离                                                                │
+│     • 主库处理写操作                                                        │
+│     • 从库处理读操作                                                        │
+│     • 使用连接池管理数据库连接                                              │
+│                                                                             │
+│  5. 数据清理                                                                │
+│     • 定期清理软删除数据（deleted_at不为空）                                │
+│     • 清理过期通知（超过30天的已读通知）                                    │
+│     • 清理过期草稿（超过90天未更新）                                        │
+│                                                                             │
+│  6. 计数字段                                                                │
+│     • 使用冗余字段存储统计数据（like_count等）                              │
+│     • 通过定时任务或触发器更新统计字段                                      │
+│     • 避免实时COUNT查询                                                     │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘

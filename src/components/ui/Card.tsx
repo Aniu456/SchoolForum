@@ -7,14 +7,16 @@ import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '@/utils/helpers';
 
 const cardVariants = cva(
-  'rounded-lg bg-white dark:bg-gray-900 transition-shadow',
+  'rounded-2xl bg-white dark:bg-gray-900 transition-all duration-200',
   {
     variants: {
       variant: {
-        default: 'border border-gray-200 dark:border-gray-800',
-        elevated: 'shadow-md hover:shadow-lg',
+        default: 'border border-gray-200 dark:border-gray-800 shadow-[0_4px_20px_rgba(0,0,0,0.06)]',
+        elevated: 'shadow-[0_8px_30px_rgba(0,0,0,0.08)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)]',
         outlined: 'border-2 border-gray-300 dark:border-gray-700',
         ghost: 'border-none shadow-none',
+        modern: 'border border-gray-100 dark:border-gray-800 shadow-[0_4px_20px_rgba(0,0,0,0.06)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)] hover:-translate-y-0.5',
+        glass: 'border border-white/70 bg-white/90 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.1)] ring-1 ring-white/60 dark:border-slate-700/70 dark:bg-slate-900/70 dark:ring-slate-700/60',
       },
       padding: {
         none: 'p-0',
@@ -24,7 +26,7 @@ const cardVariants = cva(
         xl: 'p-8',
       },
       hoverable: {
-        true: 'cursor-pointer hover:shadow-lg hover:border-blue-300 dark:hover:border-blue-700',
+        true: 'cursor-pointer hover:shadow-[0_12px_40px_rgba(0,0,0,0.12)] hover:border-blue-300 dark:hover:border-blue-700 hover:-translate-y-0.5',
       },
     },
     defaultVariants: {
@@ -33,6 +35,7 @@ const cardVariants = cva(
     },
   }
 );
+
 
 export interface CardProps
   extends HTMLAttributes<HTMLDivElement>,

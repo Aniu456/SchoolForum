@@ -1,7 +1,11 @@
-import { api, PaginatedResponse } from '../core/client';
+/**
+ * 积分相关 API
+ * @deprecated 后端已移除积分系统
+ */
 
 /**
  * 积分信息
+ * @deprecated
  */
 export interface PointsInfo {
   id: string;
@@ -16,6 +20,7 @@ export interface PointsInfo {
 
 /**
  * 积分历史记录
+ * @deprecated
  */
 export interface PointsHistory {
   id: string;
@@ -28,6 +33,7 @@ export interface PointsHistory {
 
 /**
  * 积分排行榜项
+ * @deprecated
  */
 export interface LeaderboardItem {
   userId: string;
@@ -44,39 +50,51 @@ export interface LeaderboardItem {
 
 /**
  * 积分历史查询参数
+ * @deprecated
  */
 export interface PointsHistoryParams {
   page?: number;
   limit?: number;
 }
 
+const DEPRECATION_MESSAGE = '积分系统已废弃，可使用点赞数/粉丝数作为活跃度指标';
+
 /**
  * 积分相关 API
+ * @deprecated 积分系统已废弃，后端不再支持
  */
 export const pointsApi = {
   /**
-   * 获取我的积分
-   * GET /points/me
+   * @deprecated
    */
-  getMyPoints: () => {
-    return api.get<PointsInfo>('/points/me');
+  getMyPoints: async (): Promise<PointsInfo> => {
+    console.warn('[pointsApi] ' + DEPRECATION_MESSAGE);
+    // 返回默认值而不是抛错，避免破坏UI
+    return {
+      id: '',
+      userId: '',
+      totalPoints: 0,
+      level: 1,
+      nextLevelPoints: 100,
+      progress: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
   },
 
   /**
-   * 获取积分历史
-   * GET /points/history
+   * @deprecated
    */
-  getHistory: (params?: PointsHistoryParams) => {
-    return api.get<PaginatedResponse<PointsHistory>>('/points/history', { params });
+  getHistory: async (_params?: PointsHistoryParams) => {
+    console.warn('[pointsApi] ' + DEPRECATION_MESSAGE);
+    return { data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 } };
   },
 
   /**
-   * 获取积分排行榜
-   * GET /points/leaderboard
+   * @deprecated
    */
-  getLeaderboard: (limit: number = 50) => {
-    return api.get<LeaderboardItem[]>('/points/leaderboard', {
-      params: { limit },
-    });
+  getLeaderboard: async (_limit: number = 50): Promise<LeaderboardItem[]> => {
+    console.warn('[pointsApi] ' + DEPRECATION_MESSAGE);
+    return [];
   },
 };

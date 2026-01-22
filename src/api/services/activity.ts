@@ -8,7 +8,13 @@ import { api, PaginatedResponse } from '../core/client';
 export interface ActivityItem {
   type: 'POST' | 'COMMENT' | 'ANNOUNCEMENT';
   id: string;
-  author: {
+  user?: {
+    id: string;
+    username: string;
+    nickname: string;
+    avatar: string;
+  };
+  author?: {
     id: string;
     username: string;
     nickname: string;
@@ -21,7 +27,7 @@ export interface ActivityItem {
 
 const activityApi = {
   /**
-   * 获取关注用户的动态流
+   * 获取关注用户的动态流（需要认证）
    * 包括：关注用户发布的新帖子、新评论、新公告等
    * GET /activities/following
    */
@@ -33,15 +39,15 @@ const activityApi = {
   },
 
   /**
-   * 获取我的动态
+   * 获取我的动态（需要认证）
    * 包括：我发布的帖子、我发表的评论
-   * GET /activities/me
+   * GET /activities/my
    */
   getMyActivities: async (params?: {
     page?: number;
     limit?: number;
   }): Promise<PaginatedResponse<ActivityItem>> => {
-    return await api.get('/activities/me', { params });
+    return await api.get('/activities/my', { params });
   },
 };
 

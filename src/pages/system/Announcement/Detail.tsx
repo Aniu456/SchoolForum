@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { announcementApi, AnnouncementPriority } from '@/api/content/announcement';
+import { announcementApi, AnnouncementType } from '@/api/content/announcement';
 import { Loading, Button } from '@/components';
 
 export default function AnnouncementDetail() {
@@ -13,31 +13,27 @@ export default function AnnouncementDetail() {
     enabled: !!id,
   });
 
-  const getPriorityStyle = (priority: AnnouncementPriority) => {
-    switch (priority) {
+  const getTypeStyle = (type: AnnouncementType) => {
+    switch (type) {
       case 'URGENT':
         return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
-      case 'HIGH':
+      case 'WARNING':
         return 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-400';
-      case 'NORMAL':
+      case 'INFO':
         return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
-      case 'LOW':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
     }
   };
 
-  const getPriorityLabel = (priority: AnnouncementPriority) => {
-    switch (priority) {
+  const getTypeLabel = (type: AnnouncementType) => {
+    switch (type) {
       case 'URGENT':
         return '紧急';
-      case 'HIGH':
+      case 'WARNING':
         return '重要';
-      case 'NORMAL':
+      case 'INFO':
         return '普通';
-      case 'LOW':
-        return '一般';
       default:
         return '公告';
     }
@@ -72,12 +68,12 @@ export default function AnnouncementDetail() {
 
         {/* 公告卡片 */}
         <div className="rounded-lg bg-white p-8 shadow-lg dark:bg-gray-900">
-          {/* 优先级标签 */}
+          {/* 类型标签 */}
           <div className="mb-4">
             <span
-              className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${getPriorityStyle(announcement.priority)}`}
+              className={`inline-flex items-center rounded-full px-3 py-1 text-sm font-semibold ${getTypeStyle(announcement.type)}`}
             >
-              📢 {getPriorityLabel(announcement.priority)}
+              📢 {getTypeLabel(announcement.type)}
             </span>
           </div>
 
@@ -106,7 +102,7 @@ export default function AnnouncementDetail() {
               </div>
             </div>
             <div className="text-sm text-gray-500 dark:text-gray-500">
-              发布于 {new Date(announcement.createdAt).toLocaleString()}
+              发布于 {announcement.publishedAt ? new Date(announcement.publishedAt).toLocaleString() : new Date(announcement.createdAt || '').toLocaleString()}
             </div>
           </div>
 
@@ -118,7 +114,7 @@ export default function AnnouncementDetail() {
           </div>
 
           {/* 更新时间 */}
-          {announcement.updatedAt !== announcement.createdAt && (
+          {announcement.updatedAt && announcement.createdAt && announcement.updatedAt !== announcement.createdAt && (
             <div className="mt-8 border-t border-gray-200 pt-4 text-sm text-gray-500 dark:border-gray-700 dark:text-gray-500">
               最后更新于 {new Date(announcement.updatedAt).toLocaleString()}
             </div>

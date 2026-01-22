@@ -1,14 +1,15 @@
 "use client"
 
-import { draftApi, uploadApi } from "@/api"
+import { uploadApi } from "@/api"
 import { Button, LoadingState, RichTextEditor } from "@/components"
 import { UPLOAD_CONFIG } from "@/config/constants"
+import { useDraft } from "@/hooks/useDraft"
 import { useCreatePost, usePost, useUpdatePost } from "@/hooks/usePosts"
 import { useAuthStore } from "@/store/useAuthStore"
 import type { CreatePostRequest } from "@/types"
 import { addActivity } from "@/utils/activity"
 import { useToast } from "@/utils/toast-hook"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 
 export default function PostFormPage() {
@@ -33,6 +34,8 @@ export default function PostFormPage() {
   const [imageUrls, setImageUrls] = useState("") // 支持多张图片，用逗号分隔
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  const { saveDraft, getDraft, deleteDraft } = useDraft()
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId)
 
   // 解析图片URL列表
@@ -45,18 +48,94 @@ export default function PostFormPage() {
 
   const imageList = parseImageUrls(imageUrls)
 
+  // 自动保存草稿（防抖）
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const lastSavedStateRef = useRef({ title: "", content: "", tags: "", imageUrls: "" })
+
+  const autoSaveDraft = useCallback(() => {
+    // 只有当内容真正变化时才保存
+    const currentState = { title, content, tags, imageUrls }
+    const hasChanged =
+      currentState.title !== lastSavedStateRef.current.title ||
+      currentState.content !== lastSavedStateRef.current.content ||
+      currentState.tags !== lastSavedStateRef.current.tags ||
+      currentState.imageUrls !== lastSavedStateRef.current.imageUrls
+
+    if (!hasChanged && (title || content || tags || imageUrls)) {
+      return // 内容没有变化，不需要保存
+    }
+
+    const tagsArray = tags
+      .split(",")
+      .map((tag) => tag.trim())
+      .filter((tag) => tag)
+
+    const validImages = parseImageUrls(imageUrls)
+    const draftData = {
+      id: currentDraftId || undefined,
+      title: title.trim() || undefined,
+      content: content.trim() || undefined,
+      tags: tagsArray.length > 0 ? tagsArray : undefined,
+      images: validImages.length > 0 ? validImages : undefined,
+    }
+
+    try {
+      saveDraft(draftData)
+      lastSavedStateRef.current = currentState
+      // 不显示提示，避免打扰用户
+    } catch (error) {
+      console.error("自动保存草稿失败:", error)
+    }
+  }, [title, content, tags, imageUrls, currentDraftId, saveDraft])
+
+  // 监听输入变化，自动保存草稿（30秒防抖）
+  useEffect(() => {
+    // 只在新建模式且有内容时才自动保存
+    if (isEdit) return // 编辑模式不自动保存
+
+    const hasContent = title.trim() || content.trim() || tags.trim() || imageUrls.trim()
+    if (!hasContent) return
+
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current)
+    }
+
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveDraft()
+    }, 30000) // 30秒后自动保存
+
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current)
+      }
+    }
+  }, [autoSaveDraft, isEdit, title, content, tags, imageUrls])
+
+  // 页面卸载前保存草稿
+  useEffect(() => {
+    return () => {
+      // 如果有内容变化，立即保存一次
+      const hasContent = title.trim() || content.trim() || tags.trim() || imageUrls.trim()
+      if (hasContent && !isEdit) {
+        autoSaveDraft()
+      }
+    }
+  }, [autoSaveDraft, isEdit, title, content, tags, imageUrls])
+
   // 加载草稿或帖子数据
   useEffect(() => {
     const loadDraft = async () => {
       if (draftId) {
         try {
-          const draft = await draftApi.getDetail(draftId)
+          const draft = getDraft(draftId)
           if (draft) {
             setTitle(draft.title || "")
             setContent(draft.content || "")
             setTags(draft.tags?.join(", ") || "")
             setImageUrls(draft.images?.join(", ") || "")
             setCurrentDraftId(draftId)
+          } else {
+            showError("草稿不存在或已失效")
           }
         } catch (error) {
           console.error("加载草稿失败:", error)
@@ -70,10 +149,43 @@ export default function PostFormPage() {
       }
     }
     loadDraft()
-  }, [draftId, post, isEdit, showError])
+  }, [draftId, post, isEdit, showError, getDraft])
+
+  // 从 URL 参数中获取预填标签（如从二手市场/学习资源页面跳转过来）
+  useEffect(() => {
+    const tagsParam = searchParams.get("tags")
+    if (tagsParam && !isEdit && !draftId) {
+      // 如果已有标签，合并到一起
+      setTags((prev) => {
+        const existingTags = prev.trim() ? prev.split(",").map(t => t.trim()) : []
+        const newTags = tagsParam.split(",").map(t => t.trim())
+        const allTags = [...new Set([...existingTags, ...newTags])]
+        return allTags.join(", ")
+      })
+    }
+  }, [searchParams, isEdit, draftId])
 
   if (!user) {
     navigate("/login")
+    return null
+  }
+
+  // 检查用户权限
+  if (user.isBanned) {
+    showError("您的账号已被封禁，无法发帖")
+    navigate("/")
+    return null
+  }
+
+  if (!user.canPost) {
+    showError("您暂无发帖权限")
+    navigate("/")
+    return null
+  }
+
+  if (!user.isActive) {
+    showError("您的账号未激活，无法发帖")
+    navigate("/")
     return null
   }
 
@@ -147,11 +259,7 @@ export default function PostFormPage() {
 
         // 删除草稿（如果有）
         if (currentDraftId) {
-          try {
-            await draftApi.delete(currentDraftId)
-          } catch (error) {
-            console.error("删除草稿失败:", error)
-          }
+          deleteDraft(currentDraftId)
         }
 
         showSuccess("帖子发布成功！")
@@ -237,15 +345,16 @@ export default function PostFormPage() {
 
       const validImages = parseImageUrls(imageUrls)
       const draftData = {
+        id: currentDraftId || undefined,
         title: title.trim() || undefined,
         content: content.trim() || undefined,
         tags: tagsArray.length > 0 ? tagsArray : undefined,
         images: validImages.length > 0 ? validImages : undefined,
       }
 
-      const savedDraft = await draftApi.createOrUpdate(draftData)
+      const savedDraft = saveDraft(draftData)
       setCurrentDraftId(savedDraft.id)
-      showSuccess("草稿已保存到服务器")
+      showSuccess("草稿已保存到本地")
     } catch (error) {
       console.error("保存草稿失败:", error)
       showError("保存草稿失败，请重试")

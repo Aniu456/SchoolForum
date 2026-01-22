@@ -5,15 +5,15 @@ import { api } from '../core/client';
  */
 export interface ToggleLikeDto {
   targetId: string; // 必填，UUID
-  targetType: 'POST' | 'COMMENT'; // 必填，枚举 TargetType
+  targetType: 'POST' | 'COMMENT'; // 必填，目标类型
 }
 
 /**
- * 点赞响应
+ * 点赞响应（根据 API.md 文档）
  */
 export interface ToggleLikeResponse {
-  isLiked: boolean;
-  likeCount: number;
+  action: 'liked' | 'unliked'; // 动作类型
+  likeCount: number; // 当前的点赞数
 }
 
 /**
