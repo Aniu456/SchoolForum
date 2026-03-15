@@ -1,6 +1,6 @@
 "use client"
 
-import { serviceCenterApi } from "@/api"
+import { postApi } from "@/api"
 import { Button, Card, EmptyState, LoadingState } from "@/components"
 import { formatTime } from "@/utils/format"
 import { Link, useNavigate } from "react-router-dom"
@@ -16,7 +16,15 @@ export default function SecondhandPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["secondhand", page],
-    queryFn: () => serviceCenterApi.getSecondhand(page, PAGE_SIZE),
+    queryFn: async () => {
+      return postApi.getPosts({
+        page,
+        limit: PAGE_SIZE,
+        tag: "二手交易",
+        sortBy: "createdAt",
+        order: "desc",
+      })
+    },
     placeholderData: keepPreviousData,
   })
 
@@ -116,7 +124,7 @@ export default function SecondhandPage() {
                           <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs text-orange-600">
                             二手交易
                           </span>
-                          {post.tags.slice(0, 3).map((tag, idx) => (
+                          {post.tags?.slice(0, 3).map((tag, idx) => (
                             <span
                               key={idx}
                               className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"

@@ -4,6 +4,7 @@
 export { default as Avatar } from "./base/Avatar"
 export { default as Footer } from "./base/Footer"
 export { default as InfiniteScroll } from "./base/InfiniteScroll"
+export { default as LazyImage } from "./base/LazyImage"
 export { default as Navbar } from "./base/Navbar"
 export { default as CommentItem } from "./composite/CommentItem"
 export { default as PostCard } from "./composite/PostCard"

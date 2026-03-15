@@ -1,54 +1,45 @@
 /**
  * 重置密码页面
- * 用户通过邮件链接访问，输入新密码
+ * 用户输入邮箱、验证码和新密码
  */
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams, Link } from 'react-router-dom';
+import { useSearchParams, Link, useNavigate } from 'react-router-dom';
 import { authApi } from '@/api/social/user';
 
 export default function ResetPasswordPage() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const token = searchParams.get('token');
+  const emailFromUrl = searchParams.get('email');
 
+  const [email, setEmail] = useState(emailFromUrl || '');
+  const [code, setCode] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [isVerifying, setIsVerifying] = useState(true);
-  const [isValid, setIsValid] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
 
-  // 验证令牌
   useEffect(() => {
-    const verifyToken = async () => {
-      if (!token) {
-        setError('无效的重置链接');
-        setIsVerifying(false);
-        return;
-      }
-
-      try {
-        const response = await authApi.verifyResetToken({ token });
-        setIsValid(response.valid);
-        if (!response.valid) {
-          setError(response.message || '重置链接已过期或无效');
-        }
-      } catch (err: any) {
-        setError(err.response?.data?.message || '验证失败，请重试');
-      } finally {
-        setIsVerifying(false);
-      }
-    };
-
-    verifyToken();
-  }, [token]);
+    if (emailFromUrl) {
+      setEmail(emailFromUrl);
+    }
+  }, [emailFromUrl]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
-    // 验证密码
+    // 验证输入
+    if (!email) {
+      setError('请输入邮箱地址');
+      return;
+    }
+
+    if (!code) {
+      setError('请输入验证码');
+      return;
+    }
+
     if (password.length < 6) {
       setError('密码长度至少为 6 个字符');
       return;
@@ -62,7 +53,7 @@ export default function ResetPasswordPage() {
     setIsSubmitting(true);
 
     try {
-      await authApi.resetPassword({ token: token!, password });
+      await authApi.resetPassword({ email, code, newPassword: password });
       setSuccess(true);
       // 3秒后跳转到登录页
       setTimeout(() => {
@@ -74,67 +65,6 @@ export default function ResetPasswordPage() {
       setIsSubmitting(false);
     }
   };
-
-  // 验证中
-  if (isVerifying) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 dark:bg-gray-900">
-        <div className="text-center">
-          <div className="mb-4 inline-block h-12 w-12 animate-spin rounded-full border-4 border-blue-600 border-t-transparent"></div>
-          <p className="text-gray-600 dark:text-gray-400">验证重置链接...</p>
-        </div>
-      </div>
-    );
-  }
-
-  // 令牌无效
-  if (!isValid) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 dark:bg-gray-900">
-        <div className="w-full max-w-md">
-          <div className="rounded-lg bg-white p-8 shadow-lg dark:bg-gray-800">
-            {/* 错误图标 */}
-            <div className="mb-6 flex justify-center">
-              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-red-100 dark:bg-red-900">
-                <svg
-                  className="h-8 w-8 text-red-600 dark:text-red-400"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M6 18L18 6M6 6l12 12"
-                  />
-                </svg>
-              </div>
-            </div>
-
-            <h2 className="mb-4 text-center text-2xl font-bold text-gray-900 dark:text-gray-100">
-              链接无效
-            </h2>
-            <p className="mb-6 text-center text-gray-600 dark:text-gray-400">
-              {error || '此重置链接已过期或无效，请重新申请密码重置。'}
-            </p>
-
-            <div className="space-y-3">
-              <Link
-                to="/forgot-password"
-                className="block w-full rounded-lg bg-blue-600 py-2 text-center font-medium text-white transition-colors hover:bg-blue-700">
-                重新申请重置
-              </Link>
-              <Link
-                to="/login"
-                className="block w-full rounded-lg border border-gray-300 py-2 text-center font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700">
-                返回登录
-              </Link>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   // 重置成功
   if (success) {
@@ -189,7 +119,7 @@ export default function ResetPasswordPage() {
               重置密码
             </h1>
             <p className="text-gray-600 dark:text-gray-400">
-              请输入您的新密码
+              请输入您的邮箱、验证码和新密码
             </p>
           </div>
 
@@ -202,6 +132,43 @@ export default function ResetPasswordPage() {
 
           {/* 表单 */}
           <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label
+                htmlFor="email"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                邮箱地址
+              </label>
+              <input
+                id="email"
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required
+                placeholder="请输入您的邮箱"
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
+            </div>
+
+            <div>
+              <label
+                htmlFor="code"
+                className="mb-1 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                验证码
+              </label>
+              <input
+                id="code"
+                type="text"
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+                required
+                placeholder="请输入邮件中的验证码"
+                className="w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-100"
+              />
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                验证码已发送到您的邮箱，请查收
+              </p>
+            </div>
+
             <div>
               <label
                 htmlFor="password"
@@ -247,10 +214,15 @@ export default function ResetPasswordPage() {
           </form>
 
           {/* 底部链接 */}
-          <div className="mt-6 text-center text-sm">
+          <div className="mt-6 flex items-center justify-between text-sm">
+            <Link
+              to="/forgot-password"
+              className="text-blue-600 hover:underline dark:text-blue-400">
+              重新获取验证码
+            </Link>
             <Link
               to="/login"
-              className="font-medium text-blue-600 hover:underline dark:text-blue-400">
+              className="text-blue-600 hover:underline dark:text-blue-400">
               返回登录
             </Link>
           </div>

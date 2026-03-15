@@ -152,18 +152,11 @@ export const authApi = {
   },
 
   /**
-   * 验证密码重置令牌
-   * POST /auth/verify-reset-token
-   */
-  verifyResetToken: (data: { token: string }) => {
-    return api.post<{ valid: boolean; message?: string }>("/auth/verify-reset-token", data)
-  },
-
-  /**
    * 重置密码
    * POST /auth/reset-password
+   * 后端要求: email + code + newPassword
    */
-  resetPassword: (data: { token: string; password: string }) => {
+  resetPassword: (data: { email: string; code: string; newPassword: string }) => {
     return api.post<{ message: string }>("/auth/reset-password", data)
   },
 }

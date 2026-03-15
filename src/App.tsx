@@ -168,10 +168,13 @@ export default function App() {
       // 监听新回复
       websocketService.onReply((data) => {
         console.log("[App] 新回复:", data);
+        // 立即刷新评论列表
         queryClient.invalidateQueries({ queryKey: ["comments"] });
         if (data?.postId) {
+          queryClient.invalidateQueries({ queryKey: ["comments", data.postId] });
           queryClient.invalidateQueries({ queryKey: ["post", data.postId] });
         }
+        queryClient.invalidateQueries({ queryKey: ["posts"] });
       });
 
       // 监听帖子更新

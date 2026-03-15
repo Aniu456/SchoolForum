@@ -1,7 +1,7 @@
-import { io, Socket } from 'socket.io-client'
-import { authApi } from '@/api'
-import { useAuthStore } from '@/store/useAuthStore'
-import { toast } from '@/utils/toast-utils'
+import { authApi } from "@/api"
+import { useAuthStore } from "@/store/useAuthStore"
+import { toast } from "@/utils/toast-utils"
+import { io, Socket } from "socket.io-client"
 
 /**
  * WebSocket 服务
@@ -18,7 +18,7 @@ class WebSocketService {
 
   private isTokenExpired(token: string): boolean {
     try {
-      const parts = token.split('.')
+      const parts = token.split(".")
       if (parts.length !== 3) return false
       const payload = JSON.parse(atob(parts[1])) as { exp?: number }
       if (!payload.exp) return false
@@ -31,14 +31,16 @@ class WebSocketService {
 
   private async handleTokenExpired() {
     try {
-      const refreshToken = localStorage.getItem('refreshToken')
+      const refreshToken = localStorage.getItem("refreshToken")
       if (!refreshToken) {
         useAuthStore.getState().logout()
-        toast.error('登录已过期，请重新登录')
+        toast.error("登录已过期，请重新登录")
         return
       }
 
-      const { accessToken, refreshToken: newRefreshToken } = await authApi.refreshToken({ refreshToken })
+      const { accessToken, refreshToken: newRefreshToken } = await authApi.refreshToken({
+        refreshToken,
+      })
 
       const authState = useAuthStore.getState()
       authState.setAuth({
@@ -50,14 +52,14 @@ class WebSocketService {
       this.connect(accessToken)
     } catch {
       useAuthStore.getState().logout()
-      toast.error('登录已过期，请重新登录')
+      toast.error("登录已过期，请重新登录")
     }
   }
 
   private startHeartbeat(socket: Socket) {
     setInterval(() => {
       if (socket?.connected) {
-        socket.emit('ping')
+        socket.emit("ping")
       }
     }, 25000)
   }
@@ -66,7 +68,7 @@ class WebSocketService {
    * 连接两个 Socket 服务
    */
   connect(token: string) {
-    const wsUrl = (import.meta.env.VITE_WS_URL as string | undefined) || 'http://127.0.0.1:3000'
+    const wsUrl = (import.meta.env.VITE_WS_URL as string | undefined) || "http://127.0.0.1:30000"
 
     // 如果 token 已经过期，则优先尝试刷新
     if (this.isTokenExpired(token)) {
@@ -84,33 +86,34 @@ class WebSocketService {
 
     this.notificationSocket = io(wsUrl, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ["websocket", "polling"],
     })
 
-    this.notificationSocket.on('connect', () => {
-      console.log('[NotificationSocket] ✅ Connected')
+    this.notificationSocket.on("connect", () => {
+      console.log("[NotificationSocket] ✅ Connected")
     })
 
-    this.notificationSocket.on('disconnect', () => {
-      console.log('[NotificationSocket] ❌ Disconnected')
+    this.notificationSocket.on("disconnect", () => {
+      console.log("[NotificationSocket] ❌ Disconnected")
     })
 
     // 调试：监听所有事件
     this.notificationSocket.onAny((eventName, ...args) => {
       if (import.meta.env.DEV) {
-        console.log('[NotificationSocket] Event:', eventName, args)
+        console.log("[NotificationSocket] Event:", eventName, args)
       }
     })
 
-    this.notificationSocket.on('connect_error', (error: any) => {
-      console.error('[NotificationSocket] Connection error:', error)
+    this.notificationSocket.on("connect_error", (error: any) => {
+      console.error("[NotificationSocket] Connection error:", error)
 
       const raw = error
       const nestedMessage =
         raw?.message || raw?.data?.message || raw?.data || raw?.toString?.() || String(raw)
-      const message = typeof nestedMessage === 'string' ? nestedMessage : JSON.stringify(nestedMessage)
+      const message =
+        typeof nestedMessage === "string" ? nestedMessage : JSON.stringify(nestedMessage)
 
-      if (!this.isRefreshing && message.includes('jwt expired')) {
+      if (!this.isRefreshing && message.includes("jwt expired")) {
         this.isRefreshing = true
         this.handleTokenExpired().finally(() => {
           this.isRefreshing = false
@@ -119,12 +122,12 @@ class WebSocketService {
       }
 
       if (
-        message.includes('invalid signature') ||
-        message.includes('invalid token') ||
-        message.includes('jwt malformed')
+        message.includes("invalid signature") ||
+        message.includes("invalid token") ||
+        message.includes("jwt malformed")
       ) {
         useAuthStore.getState().logout()
-        toast.error('登录状态已失效，请重新登录')
+        toast.error("登录状态已失效，请重新登录")
       }
     })
 
@@ -140,33 +143,34 @@ class WebSocketService {
 
     this.chatSocket = io(`${wsUrl}/chat`, {
       auth: { token },
-      transports: ['websocket', 'polling'],
+      transports: ["websocket", "polling"],
     })
 
-    this.chatSocket.on('connect', () => {
-      console.log('[ChatSocket] ✅ Connected')
+    this.chatSocket.on("connect", () => {
+      console.log("[ChatSocket] ✅ Connected")
     })
 
-    this.chatSocket.on('disconnect', () => {
-      console.log('[ChatSocket] ❌ Disconnected')
+    this.chatSocket.on("disconnect", () => {
+      console.log("[ChatSocket] ❌ Disconnected")
     })
 
     // 调试：监听所有事件
     this.chatSocket.onAny((eventName, ...args) => {
       if (import.meta.env.DEV) {
-        console.log('[ChatSocket] Event:', eventName, args)
+        console.log("[ChatSocket] Event:", eventName, args)
       }
     })
 
-    this.chatSocket.on('connect_error', (error: any) => {
-      console.error('[ChatSocket] Connection error:', error)
+    this.chatSocket.on("connect_error", (error: any) => {
+      console.error("[ChatSocket] Connection error:", error)
 
       const raw = error
       const nestedMessage =
         raw?.message || raw?.data?.message || raw?.data || raw?.toString?.() || String(raw)
-      const message = typeof nestedMessage === 'string' ? nestedMessage : JSON.stringify(nestedMessage)
+      const message =
+        typeof nestedMessage === "string" ? nestedMessage : JSON.stringify(nestedMessage)
 
-      if (!this.isRefreshing && message.includes('jwt expired')) {
+      if (!this.isRefreshing && message.includes("jwt expired")) {
         this.isRefreshing = true
         this.handleTokenExpired().finally(() => {
           this.isRefreshing = false
@@ -175,12 +179,12 @@ class WebSocketService {
       }
 
       if (
-        message.includes('invalid signature') ||
-        message.includes('invalid token') ||
-        message.includes('jwt malformed')
+        message.includes("invalid signature") ||
+        message.includes("invalid token") ||
+        message.includes("jwt malformed")
       ) {
         useAuthStore.getState().logout()
-        toast.error('登录状态已失效，请重新登录')
+        toast.error("登录状态已失效，请重新登录")
       }
     })
 
@@ -192,60 +196,60 @@ class WebSocketService {
   // ============================================
 
   onNotification(callback: (notification: any) => void) {
-    this.notificationSocket?.on('notification:new', callback)
+    this.notificationSocket?.on("notification:new", callback)
   }
 
   subscribeNotification(callback: (notification: any) => void) {
     if (!this.notificationSocket) return () => undefined
     const handler = (data: any) => callback(data)
-    this.notificationSocket.on('notification:new', handler)
+    this.notificationSocket.on("notification:new", handler)
     return () => {
-      this.notificationSocket?.off('notification:new', handler)
+      this.notificationSocket?.off("notification:new", handler)
     }
   }
 
   onLike(callback: (data: any) => void) {
-    this.notificationSocket?.on('like', callback)
+    this.notificationSocket?.on("like", callback)
   }
 
   onComment(callback: (data: any) => void) {
-    this.notificationSocket?.on('comment', callback)
+    this.notificationSocket?.on("comment", callback)
   }
 
   onReply(callback: (data: any) => void) {
-    this.notificationSocket?.on('reply', callback)
+    this.notificationSocket?.on("reply", callback)
   }
 
   onPost(callback: (data: any) => void) {
-    this.notificationSocket?.on('post:new', callback)
+    this.notificationSocket?.on("post:new", callback)
   }
 
   onPostUpdate(callback: (data: any) => void) {
-    this.notificationSocket?.on('post:update', callback)
+    this.notificationSocket?.on("post:update", callback)
   }
 
   onPostDelete(callback: (data: any) => void) {
-    this.notificationSocket?.on('post:delete', callback)
+    this.notificationSocket?.on("post:delete", callback)
   }
 
   onAnnouncement(callback: (data: any) => void) {
-    this.notificationSocket?.on('announcement:new', callback)
+    this.notificationSocket?.on("announcement:new", callback)
   }
 
   onFollow(callback: (data: any) => void) {
-    this.notificationSocket?.on('follow', callback)
+    this.notificationSocket?.on("follow", callback)
   }
 
   onUnfollow(callback: (data: any) => void) {
-    this.notificationSocket?.on('unfollow', callback)
+    this.notificationSocket?.on("unfollow", callback)
   }
 
   onUserOnline(callback: (data: { userId: string; username: string }) => void) {
-    this.notificationSocket?.on('user:online', callback)
+    this.notificationSocket?.on("user:online", callback)
   }
 
   onUserOffline(callback: (data: { userId: string; username: string }) => void) {
-    this.notificationSocket?.on('user:offline', callback)
+    this.notificationSocket?.on("user:offline", callback)
   }
 
   // ============================================
@@ -256,42 +260,42 @@ class WebSocketService {
    * 监听新私信 (实时)
    */
   onNewMessage(callback: (data: { message: any; sender: any }) => void) {
-    this.chatSocket?.on('chat:message_created', callback)
+    this.chatSocket?.on("chat:message_created", callback)
   }
 
   /**
    * 监听私信未读数更新
    */
   onChatUnreadCount(callback: (data: { count: number }) => void) {
-    this.chatSocket?.on('chat:unread_count', callback)
+    this.chatSocket?.on("chat:unread_count", callback)
   }
 
   /**
    * 监听对方正在输入
    */
   onUserTyping(callback: (data: { userId: string; conversationId: string }) => void) {
-    this.chatSocket?.on('chat:user_typing', callback)
+    this.chatSocket?.on("chat:user_typing", callback)
   }
 
   /**
    * 加入聊天房间
    */
   joinConversation(conversationId: string) {
-    this.chatSocket?.emit('chat:join', { conversationId })
+    this.chatSocket?.emit("chat:join", { conversationId })
   }
 
   /**
    * 离开聊天房间
    */
   leaveConversation(conversationId: string) {
-    this.chatSocket?.emit('chat:leave', { conversationId })
+    this.chatSocket?.emit("chat:leave", { conversationId })
   }
 
   /**
    * 发送正在输入状态
    */
   sendTyping(conversationId: string) {
-    this.chatSocket?.emit('chat:typing', { conversationId })
+    this.chatSocket?.emit("chat:typing", { conversationId })
   }
 
   // ============================================
@@ -299,7 +303,7 @@ class WebSocketService {
   // ============================================
 
   markNotificationRead(notificationId: string) {
-    this.notificationSocket?.emit('notification:mark_read', { notificationId })
+    this.notificationSocket?.emit("notification:mark_read", { notificationId })
   }
 
   /**

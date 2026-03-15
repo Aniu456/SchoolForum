@@ -83,7 +83,8 @@ export function formatDate(date: string | Date | undefined | null): string {
 /**
  * 格式化数字（添加千位分隔符）
  */
-export function formatNumber(num: number): string {
+export function formatNumber(num: number | undefined | null): string {
+  if (num == null || isNaN(num)) return '0';
   return num.toLocaleString('zh-CN');
 }
 

@@ -18,7 +18,8 @@ export const useComments = (
     queryKey: ['comments', postId, params],
     queryFn: () => postApi.getPostComments(postId, params),
     enabled: !!postId,
-    staleTime: 1000 * 60 * 2, // 2分钟内数据视为新鲜
+    staleTime: 0, // 设置为0，确保总是获取最新数据
+    refetchOnWindowFocus: true, // 窗口聚焦时重新获取
   });
 };
 
@@ -27,11 +28,18 @@ export const useCreateComment = () => {
 
   return useMutation({
     mutationFn: (data: CreateCommentRequest) => commentApi.createComment(data),
-    onSuccess: (data) => {
-      // 使评论列表缓存失效
-      queryClient.invalidateQueries({ queryKey: ['comments', data.postId] });
-      // 更新帖子评论数
-      queryClient.invalidateQueries({ queryKey: ['post', data.postId] });
+    onSuccess: (response, variables) => {
+      // 使用请求数据中的 postId，因为响应可能不包含
+      const postId = (response as any)?.postId || variables.postId;
+      
+      if (postId) {
+        // 使评论列表缓存失效并立即刷新
+        queryClient.invalidateQueries({ queryKey: ['comments', postId] });
+        // 更新帖子评论数
+        queryClient.invalidateQueries({ queryKey: ['post', postId] });
+      }
+      // 刷新所有评论和帖子列表
+      queryClient.invalidateQueries({ queryKey: ['comments'] });
       queryClient.invalidateQueries({ queryKey: ['posts'] });
     },
   });

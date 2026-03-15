@@ -1,7 +1,7 @@
 "use client"
 
-import { favoriteApi, followApi, likeApi, messageApi, postApi } from "@/api"
-import { Avatar, Button, ConfirmDialog, EmptyState, LoadingState, RichTextEditor } from "@/components"
+import { favoriteApi, followApi, likeApi, messageApi, postApi, uploadApi } from "@/api"
+import { Avatar, Button, ConfirmDialog, EmptyState, LazyImage, LoadingState, RichTextEditor } from "@/components"
 import CommentItem from "@/components/composite/CommentItem"
 import ShareButton from "@/components/composite/ShareButton"
 import { useComments, useCreateComment } from "@/hooks/useComments"
@@ -11,13 +11,13 @@ import { formatNumber, formatTime } from "@/utils/format"
 import { stripHtml } from "@/utils/helpers"
 import { sanitizeHtml } from "@/utils/sanitize"
 import { useToast } from "@/utils/toast-hook"
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { Link, useNavigate, useParams } from "react-router-dom"
 // import removed: useLikePost, useUnlikePost
 import NotFoundPage from "@/pages/system/NotFound"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useQueryClient } from "@tanstack/react-query"
-import { ArrowLeft, Eye, MessageSquare, Star, ThumbsUp } from "lucide-react"
+import { ArrowLeft, Eye, ImageIcon, MessageSquare, Star, ThumbsUp } from "lucide-react"
 
 export default function PostDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -25,14 +25,83 @@ export default function PostDetailPage() {
   const { showSuccess, showError } = useToast()
   const { user: currentUser } = useAuthStore()
   const { data: post, isLoading: postLoading, error: postError, refetch: refetchPost } = usePost(id ?? "")
-  const { data: commentsData, isLoading: commentsLoading } = useComments(id ?? "", {
+  const { data: commentsData, isLoading: commentsLoading, refetch: refetchComments } = useComments(id ?? "", {
     page: 1,
     limit: 20,
     sortBy: "createdAt",
     previewLimit: 3,
   })
   const queryClient = useQueryClient()
-  const comments = Array.isArray(commentsData) ? commentsData : commentsData?.data || []
+  
+  // 构建评论树形结构：将扁平列表转换为嵌套结构
+  const buildCommentTree = (comments: Comment[]): (Comment & { replies?: Comment[] })[] => {
+    if (!comments || comments.length === 0) return []
+    
+    const commentMap = new Map<string, Comment & { replies?: Comment[] }>()
+    const rootComments: (Comment & { replies?: Comment[] })[] = []
+    
+    // 第一遍：创建所有评论的映射，保留已有的 replies
+    comments.forEach((comment) => {
+      commentMap.set(comment.id, { 
+        ...comment, 
+        replies: (comment as any).replies || [] 
+      })
+    })
+    
+    // 第二遍：构建树形结构
+    comments.forEach((comment) => {
+      const commentWithReplies = commentMap.get(comment.id)!
+      if (comment.parentId) {
+        // 这是回复，添加到父评论的 replies 中
+        const parent = commentMap.get(comment.parentId)
+        if (parent) {
+          if (!parent.replies) {
+            parent.replies = []
+          }
+          // 避免重复添加
+          if (!parent.replies.find((r: Comment) => r.id === comment.id)) {
+            parent.replies.push(commentWithReplies)
+          }
+        }
+      } else {
+        // 这是根评论
+        rootComments.push(commentWithReplies)
+      }
+    })
+    
+    // 对每个评论的 replies 进行排序（按创建时间）
+    const sortReplies = (comment: Comment & { replies?: Comment[] }) => {
+      if (comment.replies && comment.replies.length > 0) {
+        comment.replies.sort((a, b) => 
+          new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+        )
+        comment.replies.forEach(sortReplies)
+      }
+    }
+    rootComments.forEach(sortReplies)
+    
+    return rootComments
+  }
+  
+  // 如果后端已经返回了嵌套结构，直接使用；否则构建树形结构
+  const comments = useMemo(() => {
+    const allComments = Array.isArray(commentsData) ? commentsData : commentsData?.data || []
+    
+    if (!allComments || allComments.length === 0) return []
+    
+    // 检查是否已经有嵌套结构（检查第一个评论是否有 replies 属性）
+    const hasNestedStructure = allComments.some((c: Comment) => 
+      (c as any).replies !== undefined && Array.isArray((c as any).replies)
+    )
+    
+    if (hasNestedStructure) {
+      // 后端已经返回了嵌套结构，只返回根评论
+      return allComments.filter((c: Comment) => !c.parentId)
+    } else {
+      // 构建树形结构
+      return buildCommentTree(allComments)
+    }
+  }, [commentsData, buildCommentTree])
   const createCommentMutation = useCreateComment()
   // API 对接后改用 likesApi.toggle；保留 hooks 引用以兼容类型，但不使用
 
@@ -53,7 +122,7 @@ export default function PostDetailPage() {
   const [localLikes, setLocalLikes] = useState(baseLikes)
   const [localCollected, setLocalCollected] = useState(baseCollected)
   const [favoriteCount, setFavoriteCount] = useState(baseCollectedCount)
-  const [favoriteRecordId, setFavoriteRecordId] = useState<string | null>(null)
+  const [_favoriteRecordId, setFavoriteRecordId] = useState<string | null>(null)
 
   // 同步 post 数据到本地状态（用于乐观更新）
   useEffect(() => {
@@ -81,6 +150,27 @@ export default function PostDetailPage() {
       .then((res) => setIsFollowingAuthor(!!res.isFollowing))
       .catch(() => setIsFollowingAuthor(false))
   }, [post?.author?.id, currentUser?.id])
+
+  // 图片轮播状态（必须在所有 early return 之前声明）
+  const [currentImageIndex, setCurrentImageIndex] = useState(0)
+  const [lightboxOpen, setLightboxOpen] = useState(false)
+  const images = post?.images ?? []
+  const prevImage = useCallback(() =>
+    setCurrentImageIndex((i) => (i - 1 + images.length) % images.length), [images.length])
+  const nextImage = useCallback(() =>
+    setCurrentImageIndex((i) => (i + 1) % images.length), [images.length])
+
+  // 键盘控制 lightbox
+  useEffect(() => {
+    if (!lightboxOpen) return
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") prevImage()
+      if (e.key === "ArrowRight") nextImage()
+      if (e.key === "Escape") setLightboxOpen(false)
+    }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [lightboxOpen, prevImage, nextImage])
 
   if (!id) {
     return <NotFoundPage />
@@ -209,7 +299,7 @@ export default function PostDetailPage() {
     try {
       const res = await likeApi.toggleLike({ targetId: post.id, targetType: "POST" })
       setLocalIsLiked(res.action === "liked")
-      setLocalLikes(res.likeCount)
+      setLocalLikes(res.likeCount ?? localLikes)
       // 刷新缓存并重新获取数据
       await queryClient.invalidateQueries({ queryKey: ["post", post.id] })
       await queryClient.invalidateQueries({ queryKey: ["posts"] })
@@ -264,10 +354,27 @@ export default function PostDetailPage() {
       setReplyTo(null)
 
       showSuccess("评论发布成功")
-      // 显式刷新评论列表，确保新评论/回复立即可见
+      
+      // 立即刷新评论列表，确保新评论/回复立即可见
+      // 先使缓存失效
       queryClient.invalidateQueries({ queryKey: ["comments", post.id] })
       queryClient.invalidateQueries({ queryKey: ["post", post.id] })
       queryClient.invalidateQueries({ queryKey: ["posts"] })
+      
+      // 然后立即刷新评论列表
+      if (refetchComments) {
+        await refetchComments()
+      }
+      
+      // 如果是回复，滚动到对应的评论位置
+      if (replyTo?.id) {
+        setTimeout(() => {
+          const commentElement = document.querySelector(`[data-comment-id="${replyTo.id}"]`)
+          if (commentElement) {
+            commentElement.scrollIntoView({ behavior: "smooth", block: "center" })
+          }
+        }, 500)
+      }
     } catch {
       showError("评论发布失败，请重试")
     }
@@ -293,81 +400,82 @@ export default function PostDetailPage() {
       await queryClient.invalidateQueries({ queryKey: ["posts"] })
       showSuccess("帖子已删除")
       navigate("/")
-    } catch (error) {
+    } catch {
       showError("删除帖子失败，请稍后重试")
       setShowDeleteConfirm(false)
     }
   }
 
   return (
-    <div className="bg-[#F6F8FB]">
-      <div className="mx-auto max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
-        <div className="mb-6 flex items-center gap-2 text-sm text-gray-500">
+    <div className="min-h-screen bg-gray-50/70">
+      <div className="mx-auto max-w-5xl px-4 py-6 sm:px-6 lg:px-8">
+        {/* 面包屑 */}
+        <div className="mb-5 flex items-center gap-2 text-sm text-gray-400">
           <button
             onClick={() => navigate(-1)}
-            className="flex items-center gap-1 text-gray-600 transition hover:text-blue-600"
+            className="flex items-center gap-1.5 font-medium text-gray-500 transition hover:text-blue-600"
           >
             <ArrowLeft className="h-4 w-4" />
-            返回列表
+            返回
           </button>
           <span>/</span>
-          <span className="text-gray-400">帖子详情</span>
+          <span>帖子详情</span>
         </div>
 
-        <div className="grid gap-6 lg:grid-cols-[2fr_0.9fr]">
-          <div className="space-y-6">
-            <article className="overflow-hidden rounded-3xl border border-gray-100 bg-white shadow-sm">
-              <div className="p-6 sm:p-10">
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  {(post.isPinned || post.isHot) && (
-                    <div className="flex items-center gap-2 mr-1">
-                      {post.isPinned && (
-                        <span className="flex items-center justify-center rounded-md bg-red-50 px-2.5 py-1 text-xs font-bold text-red-600 shadow-sm ring-1 ring-red-100">
-                          置顶
-                        </span>
-                      )}
-                      {post.isHot && (
-                        <span className="flex items-center justify-center rounded-md bg-orange-50 px-2.5 py-1 text-xs font-bold text-orange-600 shadow-sm ring-1 ring-orange-100">
-                          热门
-                        </span>
-                      )}
-                    </div>
+        <div className="grid gap-5 lg:grid-cols-[1fr_280px]">
+          {/* ── 主内容 ── */}
+          <div className="space-y-5 min-w-0">
+            <article className="overflow-hidden rounded-2xl bg-white shadow-sm ring-1 ring-gray-100">
+              <div className="p-6 sm:p-8">
+                {/* 标签行 */}
+                <div className="mb-3 flex flex-wrap items-center gap-2">
+                  {post.isPinned && (
+                    <span className="rounded-md bg-red-50 px-2 py-0.5 text-xs font-bold text-red-600 ring-1 ring-red-100">
+                      置顶
+                    </span>
+                  )}
+                  {post.isHot && (
+                    <span className="rounded-md bg-orange-50 px-2 py-0.5 text-xs font-bold text-orange-500 ring-1 ring-orange-100">
+                      🔥 热门
+                    </span>
                   )}
                   {post.tags?.map((tag) => (
                     <Link
                       key={tag}
                       to={`/search?q=${encodeURIComponent(tag)}`}
-                      className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-600 transition-colors hover:bg-blue-50 hover:text-blue-600"
+                      className="rounded-full bg-blue-50 px-3 py-0.5 text-xs font-medium text-blue-600 transition hover:bg-blue-100"
                     >
                       #{tag}
                     </Link>
                   ))}
                 </div>
 
-                <h1 className="mb-6 text-3xl font-extrabold leading-tight text-gray-900 sm:text-4xl tracking-tight">
+                {/* 标题 */}
+                <h1 className="mb-5 text-2xl font-extrabold leading-snug text-gray-900 sm:text-3xl">
                   {post.title}
                 </h1>
 
-                <div className="flex flex-col gap-4 pb-8 mb-8 border-b border-gray-50 sm:flex-row sm:items-center sm:justify-between">
+                {/* 作者信息行 */}
+                <div className="flex items-center justify-between gap-4 pb-5 mb-5 border-b border-gray-100">
                   {post.author && (
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
                       <Link to={`/users/${post.author.id}`} className="shrink-0">
                         <Avatar
                           src={post.author.avatar}
                           alt={post.author.username}
                           username={post.author.username}
-                          size={52}
+                          size={44}
                           seed={post.author.id}
                           className="ring-2 ring-white shadow-sm"
                         />
                       </Link>
                       <div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           <Link
                             to={`/users/${post.author.id}`}
-                            className="text-base font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                            className="text-sm font-bold text-gray-900 hover:text-blue-600 transition-colors"
                           >
-                            {post.author.username}
+                            {post.author.nickname || post.author.username}
                           </Link>
                           {isAuthor && (
                             <span className="rounded bg-blue-50 px-1.5 py-0.5 text-[10px] font-bold text-blue-600">
@@ -375,162 +483,233 @@ export default function PostDetailPage() {
                             </span>
                           )}
                         </div>
-                        <div className="mt-1 flex items-center gap-3 text-xs text-gray-500">
+                        <div className="mt-0.5 flex items-center gap-2 text-xs text-gray-400">
                           <span title={new Date(post.createdAt).toLocaleString()} className="cursor-help">
                             {formatTime(post.createdAt)}
                           </span>
-                          <span className="h-3 w-px bg-gray-200"></span>
-                          <span>发布于 校园论坛</span>
+                          <span className="flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {formatNumber(post.viewCount ?? 0)}
+                          </span>
                         </div>
                       </div>
                     </div>
                   )}
-
                   {isAuthor && (
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={handleEdit}
-                        className="text-gray-500 hover:text-blue-600 hover:bg-blue-50"
-                      >
+                    <div className="flex gap-1.5 shrink-0">
+                      <Button variant="ghost" size="sm" onClick={handleEdit}
+                        className="text-gray-400 hover:text-blue-600 hover:bg-blue-50 text-xs">
                         编辑
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-gray-400 hover:text-red-600 hover:bg-red-50"
-                        onClick={handleDelete}
-                      >
+                      <Button variant="ghost" size="sm" onClick={handleDelete}
+                        className="text-gray-400 hover:text-red-600 hover:bg-red-50 text-xs">
                         删除
                       </Button>
                     </div>
                   )}
                 </div>
 
-                {post.images && post.images.length > 0 && (
-                  <div className="mb-8 space-y-4">
-                    {post.images.map((img, index) => (
-                      <img
-                        key={img || index}
-                        src={img}
-                        alt={post.title}
-                        loading="lazy"
-                        className="w-full rounded-2xl object-cover shadow-sm ring-1 ring-gray-100"
-                      />
-                    ))}
+                {/* 图片轮播 */}
+                {images.length > 0 && (
+                  <div className="mb-6">
+                    <div className="relative overflow-hidden rounded-xl bg-gray-100">
+                      {/* 主图 */}
+                      <div
+                        className="relative cursor-zoom-in"
+                        onClick={() => setLightboxOpen(true)}
+                      >
+                        <LazyImage
+                          src={images[currentImageIndex]}
+                          alt={`${post.title} - 图片 ${currentImageIndex + 1}`}
+                          aspectRatio="16/9"
+                          objectFit="contain"
+                          className="w-full"
+                          containerClassName="w-full max-h-[480px]"
+                          showLoadingSpinner={true}
+                        />
+                        {/* 计数角标 */}
+                        <div className="absolute bottom-3 right-3 rounded-full bg-black/50 px-2.5 py-1 text-xs font-medium text-white backdrop-blur-sm">
+                          {currentImageIndex + 1} / {images.length}
+                        </div>
+                      </div>
+
+                      {/* 左右切换 */}
+                      {images.length > 1 && (
+                        <>
+                          <button
+                            onClick={prevImage}
+                            className="absolute left-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 transition-colors"
+                          >
+                            ‹
+                          </button>
+                          <button
+                            onClick={nextImage}
+                            className="absolute right-2 top-1/2 -translate-y-1/2 flex h-8 w-8 items-center justify-center rounded-full bg-black/40 text-white backdrop-blur-sm hover:bg-black/60 transition-colors"
+                          >
+                            ›
+                          </button>
+                        </>
+                      )}
+                    </div>
+
+                    {/* 缩略图条 */}
+                    {images.length > 1 && (
+                      <div className="mt-2 flex gap-2 overflow-x-auto pb-1">
+                        {images.map((img, i) => (
+                          <button
+                            key={i}
+                            onClick={() => setCurrentImageIndex(i)}
+                            className={`shrink-0 h-14 w-14 overflow-hidden rounded-lg ring-2 transition-all ${
+                              i === currentImageIndex
+                                ? "ring-blue-500 opacity-100"
+                                : "ring-transparent opacity-60 hover:opacity-90"
+                            }`}
+                          >
+                            <img src={img} alt="" className="h-full w-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
 
-                <div className="prose prose-lg max-w-none text-gray-800">
-                  <div
-                    className="whitespace-pre-wrap leading-relaxed"
-                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
-                  />
-                </div>
+                {/* 正文 */}
+                <div
+                  className="prose prose-base max-w-none text-gray-800 leading-relaxed
+                    [&_img]:rounded-xl [&_img]:shadow-sm [&_img]:my-4
+                    [&_blockquote]:border-l-4 [&_blockquote]:border-blue-200 [&_blockquote]:bg-blue-50/50 [&_blockquote]:px-4 [&_blockquote]:py-2 [&_blockquote]:rounded-r-lg [&_blockquote]:text-gray-600
+                    [&_a]:text-blue-600 [&_a]:underline"
+                  dangerouslySetInnerHTML={{ __html: sanitizeHtml(post.content) }}
+                />
               </div>
 
-              <div className="sticky bottom-0 z-10 -mx-6 -mb-6 mt-8 flex flex-wrap items-center justify-between gap-4 border-t border-gray-50 bg-white/80 px-6 py-4 backdrop-blur-md sm:-mx-8 sm:-mb-8 sm:px-8">
-                <div className="flex flex-1 items-center justify-center gap-2 sm:justify-start">
-                  {/* Main Actions Centered on Mobile, Left on Desktop effectively (or just flex start) */}
-                  <div className="flex items-center gap-2">
+              {/* 底部操作栏 */}
+              <div className="flex items-center justify-between gap-3 border-t border-gray-50 bg-gray-50/50 px-6 py-3 sm:px-8">
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handleLike}
+                    className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 ${
+                      localIsLiked
+                        ? "bg-red-50 text-red-500 ring-1 ring-red-100"
+                        : "bg-white text-gray-500 ring-1 ring-gray-200 hover:ring-gray-300"
+                    }`}
+                  >
+                    <ThumbsUp className={`h-4 w-4 ${localIsLiked ? "fill-current" : ""}`} />
+                    <span>{formatNumber(localLikes)}</span>
+                  </button>
+
+                  {currentUser && (
                     <button
-                      onClick={handleLike}
-                      className={`group flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all active:scale-95 ${
-                        localIsLiked
-                          ? "bg-red-50 text-red-600 shadow-sm ring-1 ring-red-100"
-                          : "bg-gray-50 text-gray-600 hover:bg-gray-100"
+                      onClick={handleCollect}
+                      className={`flex items-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium transition-all active:scale-95 ${
+                        localCollected
+                          ? "bg-amber-50 text-amber-500 ring-1 ring-amber-100"
+                          : "bg-white text-gray-500 ring-1 ring-gray-200 hover:ring-gray-300"
                       }`}
                     >
-                      <ThumbsUp
-                        className={`h-4 w-4 transition-transform group-hover:-rotate-12 ${
-                          localIsLiked ? "fill-current" : ""
-                        }`}
-                      />
-                      <span>{formatNumber(localLikes)} 赞</span>
+                      <Star className={`h-4 w-4 ${localCollected ? "fill-current" : ""}`} />
+                      <span>{localCollected ? "已收藏" : "收藏"}</span>
                     </button>
-                    {currentUser && (
-                      <button
-                        onClick={handleCollect}
-                        className={`group flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-medium transition-all active:scale-95 ${
-                          localCollected
-                            ? "bg-amber-50 text-amber-600 shadow-sm ring-1 ring-amber-100"
-                            : "bg-gray-50 text-gray-600 hover:bg-gray-100"
-                        }`}
-                      >
-                        <Star
-                          className={`h-4 w-4 transition-transform group-hover:rotate-12 ${
-                            localCollected ? "fill-current" : ""
-                          }`}
-                        />
-                        <span>
-                          {localCollected ? "已收藏" : "收藏"} {formatNumber(favoriteCount)}
-                        </span>
-                      </button>
-                    )}
-                  </div>
+                  )}
 
-                  <div className="hidden h-4 w-px bg-gray-200 sm:block mx-2"></div>
+                  <span className="flex items-center gap-1 text-xs text-gray-400 ml-1">
+                    <MessageSquare className="h-3.5 w-3.5" />
+                    {formatNumber(post.commentCount ?? comments.length)} 评论
+                  </span>
+                </div>
 
-                  <div className="hidden sm:flex items-center gap-4 text-xs text-gray-400">
-                    <span className="flex items-center gap-1.5" title="评论数">
-                      <MessageSquare className="h-4 w-4" />
-                      {formatNumber(comments.length)}
-                    </span>
-                    <span className="flex items-center gap-1.5" title="阅读量">
-                      <Eye className="h-4 w-4" />
-                      {formatNumber(post.viewCount ?? 0)}
-                    </span>
-                  </div>
-                </div>
-                <div className="shrink-0">
-                  <ShareButton
-                    url={`/posts/${post.id}`}
-                    title={post.title}
-                    description={stripHtml(post.content)}
-                    className="rounded-full bg-gray-50 p-2.5 text-gray-600 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                  />
-                </div>
+                <ShareButton
+                  url={`/posts/${post.id}`}
+                  title={post.title}
+                  description={stripHtml(post.content)}
+                  className="rounded-full bg-white p-2 text-gray-500 ring-1 ring-gray-200 hover:ring-gray-300 hover:text-blue-600 transition-colors"
+                />
               </div>
             </article>
 
-            <div className="rounded-2xl border border-gray-100 bg-white p-6 shadow-sm">
-              <div className="mb-6 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-gray-900">评论 ({post.commentCount ?? comments.length})</h2>
+            {/* 评论区 */}
+            <div className="rounded-2xl bg-white shadow-sm ring-1 ring-gray-100 overflow-hidden">
+              {/* 标题栏 */}
+              <div className="flex items-center gap-2 border-b border-gray-100 px-6 py-4 sm:px-8">
+                <h2 className="text-base font-bold text-gray-900">评论</h2>
+                <span className="rounded-full bg-gray-100 px-2.5 py-0.5 text-sm font-medium text-gray-500">
+                  {post.commentCount ?? comments.length}
+                </span>
               </div>
 
-              <div className="mb-6 rounded-2xl border border-gray-200 bg-gray-50/70 p-4" data-comment-input>
-                {replyTo && (
-                  <div className="mb-3 flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-700">
-                    <span>回复 {replyTo.username}</span>
-                    <button onClick={() => setReplyTo(null)} className="ml-auto text-blue-600 hover:underline">
-                      取消
-                    </button>
+              {/* 编辑器区 */}
+              <div className="px-6 py-5 sm:px-8" data-comment-input>
+                {/* 当前用户头像 + 编辑器横排 */}
+                <div className="flex gap-3">
+                  {currentUser && (
+                    <div className="shrink-0 mt-1">
+                      <Avatar
+                        src={currentUser.avatar}
+                        alt={currentUser.username}
+                        username={currentUser.username}
+                        size={36}
+                        seed={currentUser.id}
+                        className="ring-2 ring-white shadow-sm"
+                      />
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    {replyTo && (
+                      <div className="mb-2 flex items-center gap-2 rounded-lg border border-blue-100 bg-blue-50 px-3 py-1.5 text-sm">
+                        <span className="flex-1 text-blue-700 text-xs">
+                          回复 <span className="font-semibold">@{replyTo.username}</span>
+                        </span>
+                        <button
+                          onClick={() => setReplyTo(null)}
+                          className="shrink-0 rounded px-1.5 py-0.5 text-xs text-blue-400 hover:bg-blue-100 transition-colors"
+                        >
+                          取消
+                        </button>
+                      </div>
+                    )}
+                    <RichTextEditor
+                      content={commentContent}
+                      onChange={(val) => setCommentContent(val)}
+                      placeholder={replyTo ? `回复 @${replyTo.username}...` : "写下你的评论，支持插入图片..."}
+                      compact
+                      onUploadImage={async (file) => {
+                        const res = await uploadApi.uploadImage(file)
+                        return res.url
+                      }}
+                    />
+                    <div className="mt-2.5 flex items-center justify-between">
+                      <span className="text-xs text-gray-400">
+                        {commentContent.replace(/<[^>]*>/g, "").trim().length} 字
+                      </span>
+                      <Button
+                        size="sm"
+                        onClick={handleComment}
+                        disabled={createCommentMutation.isPending}
+                        className="rounded-full px-5 text-sm"
+                      >
+                        {createCommentMutation.isPending ? "发布中..." : replyTo ? "发布回复" : "发布评论"}
+                      </Button>
+                    </div>
                   </div>
-                )}
-                <RichTextEditor
-                  content={commentContent}
-                  onChange={(val) => setCommentContent(val)}
-                  placeholder={replyTo ? `回复 ${replyTo.username}...` : "写下你的评论..."}
-                  className="min-h-[150px] bg-white"
-                />
-                <div className="mt-4 flex items-center justify-between">
-                  <p className="text-xs text-gray-500">{commentContent.replace(/<[^>]*>/g, "").length} 字符</p>
-                  <Button size="sm" onClick={handleComment} className="rounded-full px-5">
-                    {replyTo ? "回复" : "发布评论"}
-                  </Button>
                 </div>
               </div>
 
-              <div className="space-y-4">
+              {/* 评论列表 */}
+              <div className="border-t border-gray-100">
                 {commentsLoading ? (
-                  <LoadingState message="加载评论中..." size="sm" />
+                  <div className="px-6 py-8 sm:px-8">
+                    <LoadingState message="加载评论中..." size="sm" />
+                  </div>
                 ) : comments.length > 0 ? (
-                  (comments as Comment[])
-                    .filter((c: Comment) => !c.parentId)
-                    .map((comment: Comment) => <CommentItem key={comment.id} comment={comment} onReply={handleReply} />)
+                  <div className="divide-y divide-gray-50 px-6 sm:px-8">
+                    {(comments as Comment[])
+                      .filter((c: Comment) => !c.parentId)
+                      .map((comment: Comment) => (
+                        <CommentItem key={comment.id} comment={comment} onReply={handleReply} />
+                      ))}
+                  </div>
                 ) : (
-                  <div className="py-10">
+                  <div className="px-6 py-12 sm:px-8">
                     <EmptyState title="暂无评论" description="快来抢沙发，发表第一个评论吧！" icon="💬" />
                   </div>
                 )}
@@ -538,55 +717,133 @@ export default function PostDetailPage() {
             </div>
           </div>
 
-          <aside className="space-y-4 lg:sticky lg:top-24">
-            <div className="rounded-2xl bg-white p-5 shadow-soft">
-              <h4 className="text-xs font-bold uppercase tracking-[0.08em] text-gray-400">关于作者</h4>
-              <div className="mt-3 flex items-center gap-3">
-                {post.author && (
-                  <>
-                    <Avatar
-                      src={post.author.avatar}
-                      alt={post.author.username}
-                      username={post.author.username}
-                      size={56}
-                      seed={post.author.id}
-                    />
+          {/* ── 侧边栏 ── */}
+          <aside className="space-y-4 lg:sticky lg:top-20 self-start">
+            {/* 作者卡片 */}
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100">
+              <p className="mb-3 text-[11px] font-bold uppercase tracking-widest text-gray-400">关于作者</p>
+              {post.author && (
+                <>
+                  <div className="flex items-center gap-3">
+                    <Link to={`/users/${post.author.id}`}>
+                      <Avatar
+                        src={post.author.avatar}
+                        alt={post.author.username}
+                        username={post.author.username}
+                        size={52}
+                        seed={post.author.id}
+                        className="ring-2 ring-white shadow-sm"
+                      />
+                    </Link>
                     <div>
-                      <div className="text-base font-semibold text-gray-900">{post.author.nickname}</div>
-                      <div className="text-xs text-gray-500">活跃用户</div>
+                      <Link
+                        to={`/users/${post.author.id}`}
+                        className="text-sm font-bold text-gray-900 hover:text-blue-600 transition-colors"
+                      >
+                        {post.author.nickname || post.author.username}
+                      </Link>
+                      <p className="text-xs text-gray-400">活跃用户</p>
                     </div>
-                  </>
-                )}
-              </div>
-              <div className="mt-4 grid grid-cols-3 gap-3 text-center">
-                <div>
-                  <div className="text-lg font-bold text-gray-900">{formatNumber(post.viewCount ?? 0)}</div>
-                  <div className="text-xs text-gray-500">阅读</div>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-gray-900">{formatNumber(localLikes)}</div>
-                  <div className="text-xs text-gray-500">获赞</div>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-gray-900">
-                    {formatNumber(post.commentCount ?? comments.length)}
                   </div>
-                  <div className="text-xs text-gray-500">评论</div>
-                </div>
-              </div>
-              {!isAuthor && post.author && (
-                <div className="mt-4 flex gap-2">
-                  <Button fullWidth variant={isFollowingAuthor ? "outline" : "primary"} onClick={handleFollowAuthor}>
-                    {isFollowingAuthor ? "已关注" : "关注作者"}
-                  </Button>
-                  <Button fullWidth variant="outline" onClick={handleMessageAuthor}>
-                    私信
-                  </Button>
-                </div>
+
+                  <div className="mt-4 grid grid-cols-3 divide-x divide-gray-100 rounded-xl bg-gray-50 py-3 text-center">
+                    <div>
+                      <div className="text-base font-bold text-gray-900">{formatNumber(post.viewCount ?? 0)}</div>
+                      <div className="text-[11px] text-gray-400">阅读</div>
+                    </div>
+                    <div>
+                      <div className="text-base font-bold text-gray-900">{formatNumber(localLikes)}</div>
+                      <div className="text-[11px] text-gray-400">获赞</div>
+                    </div>
+                    <div>
+                      <div className="text-base font-bold text-gray-900">
+                        {formatNumber(post.commentCount ?? comments.length)}
+                      </div>
+                      <div className="text-[11px] text-gray-400">评论</div>
+                    </div>
+                  </div>
+
+                  {!isAuthor && (
+                    <div className="mt-4 flex gap-2">
+                      <Button
+                        fullWidth
+                        size="sm"
+                        variant={isFollowingAuthor ? "outline" : "primary"}
+                        onClick={handleFollowAuthor}
+                      >
+                        {isFollowingAuthor ? "已关注" : "关注"}
+                      </Button>
+                      <Button fullWidth size="sm" variant="outline" onClick={handleMessageAuthor}>
+                        私信
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
+            </div>
+
+            {/* 帖子信息卡片 */}
+            <div className="rounded-2xl bg-white p-5 shadow-sm ring-1 ring-gray-100 text-sm space-y-3">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">帖子信息</p>
+              <div className="flex items-center justify-between text-gray-500">
+                <span>发布时间</span>
+                <span className="text-gray-700 font-medium">{formatTime(post.createdAt)}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-500">
+                <span>阅读量</span>
+                <span className="text-gray-700 font-medium">{formatNumber(post.viewCount ?? 0)}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-500">
+                <span>点赞</span>
+                <span className="text-gray-700 font-medium">{formatNumber(localLikes)}</span>
+              </div>
+              <div className="flex items-center justify-between text-gray-500">
+                <span>收藏</span>
+                <span className="text-gray-700 font-medium">{formatNumber(favoriteCount)}</span>
+              </div>
             </div>
           </aside>
         </div>
+
+        {/* Lightbox */}
+        {lightboxOpen && images.length > 0 && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
+            onClick={() => setLightboxOpen(false)}
+          >
+            <button
+              className="absolute top-4 right-4 flex h-9 w-9 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors text-xl"
+              onClick={() => setLightboxOpen(false)}
+            >
+              ×
+            </button>
+            {images.length > 1 && (
+              <>
+                <button
+                  className="absolute left-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors text-2xl"
+                  onClick={(e) => { e.stopPropagation(); prevImage() }}
+                >
+                  ‹
+                </button>
+                <button
+                  className="absolute right-4 top-1/2 -translate-y-1/2 flex h-10 w-10 items-center justify-center rounded-full bg-white/10 text-white hover:bg-white/20 transition-colors text-2xl"
+                  onClick={(e) => { e.stopPropagation(); nextImage() }}
+                >
+                  ›
+                </button>
+              </>
+            )}
+            <img
+              src={images[currentImageIndex]}
+              alt=""
+              className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain"
+              onClick={(e) => e.stopPropagation()}
+            />
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full bg-black/50 px-3 py-1 text-xs text-white">
+              {currentImageIndex + 1} / {images.length}
+            </div>
+          </div>
+        )}
 
         {/* 删除确认对话框 */}
         <ConfirmDialog

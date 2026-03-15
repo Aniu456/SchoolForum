@@ -3,35 +3,13 @@
 import { notificationApi } from "@/api"
 import { useAuthStore } from "@/store/useAuthStore"
 import { useUIStore } from "@/store/useUIStore"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useState } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import Avatar from "./Avatar"
 
 function SearchBar() {
   const navigate = useNavigate()
   const [query, setQuery] = useState("")
-
-  // 使用 useCallback 和 useRef 实现正确的防抖
-  const debouncedSearch = useMemo(() => {
-    let timeoutId: ReturnType<typeof setTimeout> | null = null
-    return (searchQuery: string) => {
-      if (timeoutId) clearTimeout(timeoutId)
-      timeoutId = setTimeout(() => {
-        const keyword = searchQuery.trim()
-        if (!keyword) return
-        if (keyword.startsWith("#")) {
-          navigate(`/search?tag=${encodeURIComponent(keyword.slice(1))}`)
-          return
-        }
-        navigate(`/search?q=${encodeURIComponent(keyword)}`)
-      }, 300)
-    }
-  }, [navigate])
-
-  // 当查询变化时触发防抖搜索
-  useEffect(() => {
-    debouncedSearch(query)
-  }, [query, debouncedSearch])
 
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault()

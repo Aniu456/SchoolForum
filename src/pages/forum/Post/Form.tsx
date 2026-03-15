@@ -12,6 +12,9 @@ import { useToast } from "@/utils/toast-hook"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useNavigate, useParams, useSearchParams } from "react-router-dom"
 
+const TITLE_MAX = 100
+const TAG_MAX = 10
+
 export default function PostFormPage() {
   const navigate = useNavigate()
   const params = useParams()
@@ -19,7 +22,6 @@ export default function PostFormPage() {
   const { showSuccess, showError } = useToast()
   const { user } = useAuthStore()
 
-  // 判断是编辑还是新建
   const postId = params.id
   const isEdit = !!postId
   const draftId = searchParams.get("draft")
@@ -30,238 +32,248 @@ export default function PostFormPage() {
 
   const [title, setTitle] = useState("")
   const [content, setContent] = useState("")
-  const [tags, setTags] = useState("")
-  const [imageUrls, setImageUrls] = useState("") // 支持多张图片，用逗号分隔
+  const [tagInput, setTagInput] = useState("")
+  const [tags, setTags] = useState<string[]>([])
+  const [imageUrls, setImageUrls] = useState<string[]>([])
   const [isUploadingImage, setIsUploadingImage] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
 
   const { saveDraft, getDraft, deleteDraft } = useDraft()
   const [currentDraftId, setCurrentDraftId] = useState<string | null>(draftId)
 
-  // 解析图片URL列表
-  const parseImageUrls = (input: string): string[] => {
-    return input
-      .split(/[,\n]/)
-      .map((url) => url.trim())
-      .filter((url) => url && /^https?:\/\/.+/i.test(url))
-  }
-
-  const imageList = parseImageUrls(imageUrls)
-
-  // 自动保存草稿（防抖）
   const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const lastSavedStateRef = useRef({ title: "", content: "", tags: "", imageUrls: "" })
+  const lastSavedStateRef = useRef({ title: "", content: "", tags: [] as string[], imageUrls: [] as string[] })
+  const tagInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
+  // ── Auto-save ──────────────────────────────────────────────────────────────
   const autoSaveDraft = useCallback(() => {
-    // 只有当内容真正变化时才保存
-    const currentState = { title, content, tags, imageUrls }
     const hasChanged =
-      currentState.title !== lastSavedStateRef.current.title ||
-      currentState.content !== lastSavedStateRef.current.content ||
-      currentState.tags !== lastSavedStateRef.current.tags ||
-      currentState.imageUrls !== lastSavedStateRef.current.imageUrls
+      title !== lastSavedStateRef.current.title ||
+      content !== lastSavedStateRef.current.content ||
+      JSON.stringify(tags) !== JSON.stringify(lastSavedStateRef.current.tags) ||
+      JSON.stringify(imageUrls) !== JSON.stringify(lastSavedStateRef.current.imageUrls)
 
-    if (!hasChanged && (title || content || tags || imageUrls)) {
-      return // 内容没有变化，不需要保存
-    }
+    if (!hasChanged) return
 
-    const tagsArray = tags
-      .split(",")
-      .map((tag) => tag.trim())
-      .filter((tag) => tag)
-
-    const validImages = parseImageUrls(imageUrls)
     const draftData = {
       id: currentDraftId || undefined,
       title: title.trim() || undefined,
       content: content.trim() || undefined,
-      tags: tagsArray.length > 0 ? tagsArray : undefined,
-      images: validImages.length > 0 ? validImages : undefined,
+      tags: tags.length > 0 ? tags : undefined,
+      images: imageUrls.length > 0 ? imageUrls : undefined,
     }
 
     try {
+      setAutoSaveStatus("saving")
       saveDraft(draftData)
-      lastSavedStateRef.current = currentState
-      // 不显示提示，避免打扰用户
+      lastSavedStateRef.current = { title, content, tags, imageUrls }
+      setAutoSaveStatus("saved")
+      setTimeout(() => setAutoSaveStatus("idle"), 2000)
     } catch (error) {
       console.error("自动保存草稿失败:", error)
+      setAutoSaveStatus("idle")
     }
   }, [title, content, tags, imageUrls, currentDraftId, saveDraft])
 
-  // 监听输入变化，自动保存草稿（30秒防抖）
   useEffect(() => {
-    // 只在新建模式且有内容时才自动保存
-    if (isEdit) return // 编辑模式不自动保存
-
-    const hasContent = title.trim() || content.trim() || tags.trim() || imageUrls.trim()
+    if (isEdit) return
+    const hasContent = title.trim() || content.trim() || tags.length > 0 || imageUrls.length > 0
     if (!hasContent) return
 
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current)
-    }
-
+    if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current)
     autoSaveTimeoutRef.current = setTimeout(() => {
       autoSaveDraft()
-    }, 30000) // 30秒后自动保存
+    }, 30000)
 
     return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current)
-      }
+      if (autoSaveTimeoutRef.current) clearTimeout(autoSaveTimeoutRef.current)
     }
   }, [autoSaveDraft, isEdit, title, content, tags, imageUrls])
 
-  // 页面卸载前保存草稿
   useEffect(() => {
     return () => {
-      // 如果有内容变化，立即保存一次
-      const hasContent = title.trim() || content.trim() || tags.trim() || imageUrls.trim()
-      if (hasContent && !isEdit) {
-        autoSaveDraft()
-      }
+      const hasContent = title.trim() || content.trim() || tags.length > 0 || imageUrls.length > 0
+      if (hasContent && !isEdit) autoSaveDraft()
     }
   }, [autoSaveDraft, isEdit, title, content, tags, imageUrls])
 
-  // 加载草稿或帖子数据
+  // ── Load draft / post ──────────────────────────────────────────────────────
   useEffect(() => {
-    const loadDraft = async () => {
+    const load = async () => {
       if (draftId) {
         try {
           const draft = getDraft(draftId)
           if (draft) {
             setTitle(draft.title || "")
             setContent(draft.content || "")
-            setTags(draft.tags?.join(", ") || "")
-            setImageUrls(draft.images?.join(", ") || "")
+            setTags(draft.tags || [])
+            setImageUrls(draft.images || [])
             setCurrentDraftId(draftId)
           } else {
             showError("草稿不存在或已失效")
           }
-        } catch (error) {
-          console.error("加载草稿失败:", error)
+        } catch {
           showError("加载草稿失败")
         }
       } else if (post && isEdit) {
         setTitle(post.title)
         setContent(post.content)
-        setTags(post.tags?.join(", ") || "")
-        setImageUrls(post.images?.join(", ") || "")
+        setTags(post.tags || [])
+        setImageUrls(post.images || [])
       }
     }
-    loadDraft()
+    load()
   }, [draftId, post, isEdit, showError, getDraft])
 
-  // 从 URL 参数中获取预填标签（如从二手市场/学习资源页面跳转过来）
   useEffect(() => {
     const tagsParam = searchParams.get("tags")
     if (tagsParam && !isEdit && !draftId) {
-      // 如果已有标签，合并到一起
-      setTags((prev) => {
-        const existingTags = prev.trim() ? prev.split(",").map(t => t.trim()) : []
-        const newTags = tagsParam.split(",").map(t => t.trim())
-        const allTags = [...new Set([...existingTags, ...newTags])]
-        return allTags.join(", ")
-      })
+      const newTags = tagsParam.split(",").map((t) => t.trim()).filter(Boolean)
+      setTags((prev) => [...new Set([...prev, ...newTags])].slice(0, TAG_MAX))
     }
   }, [searchParams, isEdit, draftId])
 
-  if (!user) {
-    navigate("/login")
-    return null
-  }
+  // ── Guards ─────────────────────────────────────────────────────────────────
+  if (!user) { navigate("/login"); return null }
+  if (user.isBanned) { showError("您的账号已被封禁，无法发帖"); navigate("/"); return null }
+  if (!user.canPost) { showError("您暂无发帖权限"); navigate("/"); return null }
+  if (!user.isActive) { showError("您的账号未激活，无法发帖"); navigate("/"); return null }
+  if (isEdit && postLoading) return <LoadingState message="加载中..." />
 
-  // 检查用户权限
-  if (user.isBanned) {
-    showError("您的账号已被封禁，无法发帖")
-    navigate("/")
-    return null
-  }
-
-  if (!user.canPost) {
-    showError("您暂无发帖权限")
-    navigate("/")
-    return null
-  }
-
-  if (!user.isActive) {
-    showError("您的账号未激活，无法发帖")
-    navigate("/")
-    return null
-  }
-
-  if (isEdit && postLoading) {
-    return <LoadingState message="加载中..." />
-  }
-
-  const isValidImageFile = (file: File, maxSize: number) => {
-    if (!UPLOAD_CONFIG.image.allowedTypes.some((type) => type === file.type)) {
+  // ── Image helpers ──────────────────────────────────────────────────────────
+  const isValidImageFile = (file: File) => {
+    if (!UPLOAD_CONFIG.image.allowedTypes.some((t) => t === file.type)) {
       showError("只支持 JPG、PNG、GIF、WebP 格式")
       return false
     }
-    if (file.size > maxSize) {
-      showError(`单张图片不能超过 ${Math.round(maxSize / (1024 * 1024))}MB`)
+    if (file.size > UPLOAD_CONFIG.image.maxSize) {
+      showError(`单张图片不能超过 ${Math.round(UPLOAD_CONFIG.image.maxSize / (1024 * 1024))}MB`)
       return false
     }
     return true
   }
 
+  const uploadFiles = async (files: File[]) => {
+    const valid = files.filter(isValidImageFile)
+    if (valid.length === 0) return
+
+    setIsUploadingImage(true)
+    try {
+      const urls: string[] = []
+      for (const file of valid) {
+        const res = await uploadApi.uploadImage(file)
+        const url = res.url?.trim()
+        if (url) urls.push(url)
+      }
+      if (urls.length > 0) {
+        setImageUrls((prev) => [...prev, ...urls])
+        showSuccess(`已上传 ${urls.length} 张图片`)
+      } else {
+        showError("上传成功但未返回 URL")
+      }
+    } catch {
+      showError("图片上传失败，请重试")
+    } finally {
+      setIsUploadingImage(false)
+    }
+  }
+
+  const handleUploadImages = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+    await uploadFiles(files)
+    e.target.value = ""
+  }
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault()
+    setIsDragging(false)
+    const files = Array.from(e.dataTransfer.files).filter((f) => f.type.startsWith("image/"))
+    if (files.length > 0) await uploadFiles(files)
+  }
+
+  const removeImage = (index: number) => {
+    setImageUrls((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const handleUploadEditorImage = async (file: File): Promise<string> => {
+    if (!isValidImageFile(file)) return ""
+    try {
+      const res = await uploadApi.uploadImage(file)
+      const url = res.url?.trim()
+      if (!url) { showError("上传成功但未返回 URL"); return "" }
+      showSuccess("图片已上传")
+      return url
+    } catch {
+      showError("图片上传失败，请重试")
+      return ""
+    }
+  }
+
+  // ── Tag helpers ────────────────────────────────────────────────────────────
+  const addTag = (raw: string) => {
+    const value = raw.trim().replace(/^#/, "")
+    if (!value || tags.includes(value) || tags.length >= TAG_MAX) return
+    setTags((prev) => [...prev, value])
+    setTagInput("")
+  }
+
+  const handleTagKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === "," || e.key === " ") {
+      e.preventDefault()
+      addTag(tagInput)
+    } else if (e.key === "Backspace" && !tagInput && tags.length > 0) {
+      setTags((prev) => prev.slice(0, -1))
+    }
+  }
+
+  const removeTag = (index: number) => {
+    setTags((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  // ── Save draft ─────────────────────────────────────────────────────────────
+  const handleSaveDraft = async () => {
+    try {
+      const draftData = {
+        id: currentDraftId || undefined,
+        title: title.trim() || undefined,
+        content: content.trim() || undefined,
+        tags: tags.length > 0 ? tags : undefined,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+      }
+      const saved = await saveDraft(draftData)
+      setCurrentDraftId(saved.id)
+      showSuccess("草稿已保存到本地")
+    } catch {
+      showError("保存草稿失败，请重试")
+    }
+  }
+
+  // ── Submit ─────────────────────────────────────────────────────────────────
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!title.trim()) {
-      showError("请输入标题")
-      return
-    }
-
-    if (!content.trim()) {
-      showError("请输入内容")
-      return
-    }
-
-    // 验证所有图片URL
-    const validImages = parseImageUrls(imageUrls)
-    if (imageUrls.trim() && validImages.length === 0) {
-      showError("图片 URL 格式不正确，请使用 http(s) 的链接")
-      return
-    }
+    if (!title.trim()) { showError("请输入标题"); return }
+    if (!content.trim()) { showError("请输入内容"); return }
 
     setIsSubmitting(true)
-
     try {
-      const tagsArray = tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag)
-
       const postData: CreatePostRequest = {
         title: title.trim(),
         content: content.trim(),
-        images: validImages.length > 0 ? validImages : undefined,
-        tags: tagsArray,
+        images: imageUrls.length > 0 ? imageUrls : undefined,
+        tags,
       }
 
       if (isEdit && postId) {
-        await updatePostMutation.mutateAsync({
-          id: postId,
-          updates: postData,
-        })
+        await updatePostMutation.mutateAsync({ id: postId, updates: postData })
         showSuccess("帖子更新成功！")
       } else {
         await createPostMutation.mutateAsync(postData)
-
-        // 记录活动
-        addActivity({
-          userId: user.id,
-          type: "post",
-          targetId: "new_post",
-          targetTitle: title.trim(),
-        })
-
-        // 删除草稿（如果有）
-        if (currentDraftId) {
-          deleteDraft(currentDraftId)
-        }
-
+        addActivity({ userId: user.id, type: "post", targetId: "new_post", targetTitle: title.trim() })
+        if (currentDraftId) deleteDraft(currentDraftId)
         showSuccess("帖子发布成功！")
       }
 
@@ -272,210 +284,289 @@ export default function PostFormPage() {
     }
   }
 
-  const handleUploadImages = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files || files.length === 0) return
-
-    // 验证所有文件
-    for (const file of Array.from(files)) {
-      if (!isValidImageFile(file, UPLOAD_CONFIG.image.maxSize)) {
-        event.target.value = ""
-        return
-      }
-    }
-
-    setIsUploadingImage(true)
-    try {
-      const uploadedUrls: string[] = []
-      for (const file of Array.from(files)) {
-        const res = await uploadApi.uploadImage(file)
-        const url = res.url?.trim()
-        if (url) {
-          uploadedUrls.push(url)
-        }
-      }
-      if (uploadedUrls.length > 0) {
-        // 追加到现有的图片URL
-        const currentUrls = parseImageUrls(imageUrls)
-        const newUrls = [...currentUrls, ...uploadedUrls]
-        setImageUrls(newUrls.join(", "))
-        showSuccess(`已上传 ${uploadedUrls.length} 张图片`)
-      } else {
-        showError("上传成功但未返回 URL")
-      }
-    } catch {
-      showError("图片上传失败，请重试")
-    } finally {
-      setIsUploadingImage(false)
-      event.target.value = ""
-    }
-  }
-
-  const removeImage = (index: number) => {
-    const currentUrls = parseImageUrls(imageUrls)
-    currentUrls.splice(index, 1)
-    setImageUrls(currentUrls.join(", "))
-  }
-
-  const handleUploadEditorImage = async (file: File) => {
-    if (!isValidImageFile(file, UPLOAD_CONFIG.image.maxSize)) {
-      return ""
-    }
-    try {
-      const res = await uploadApi.uploadImage(file)
-      const url = res.url?.trim()
-      if (!url) {
-        showError("上传成功但未返回 URL")
-        return ""
-      }
-      showSuccess("图片已上传")
-      return url
-    } catch {
-      showError("图片上传失败，请重试")
-      return ""
-    }
-  }
-
-  const handleSaveDraft = async () => {
-    try {
-      const tagsArray = tags
-        .split(",")
-        .map((tag) => tag.trim())
-        .filter((tag) => tag)
-
-      const validImages = parseImageUrls(imageUrls)
-      const draftData = {
-        id: currentDraftId || undefined,
-        title: title.trim() || undefined,
-        content: content.trim() || undefined,
-        tags: tagsArray.length > 0 ? tagsArray : undefined,
-        images: validImages.length > 0 ? validImages : undefined,
-      }
-
-      const savedDraft = saveDraft(draftData)
-      setCurrentDraftId(savedDraft.id)
-      showSuccess("草稿已保存到本地")
-    } catch (error) {
-      console.error("保存草稿失败:", error)
-      showError("保存草稿失败，请重试")
-    }
-  }
+  const wordCount = content.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim().length
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">{isEdit ? "编辑帖子" : "发布新帖子"}</h1>
-        <p className="mt-2 text-gray-600 dark:text-gray-400">{isEdit ? "更新你的帖子内容" : "分享你的想法和见解"}</p>
-      </div>
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6 lg:px-8">
 
-      <form onSubmit={handleSubmit} className="space-y-6">
-        {/* 标题 */}
-        <div>
-          <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            标题 <span className="text-red-500">*</span>
-          </label>
-          <input
-            type="text"
-            id="title"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            placeholder="请输入帖子标题"
-            maxLength={100}
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{title.length}/100</p>
-        </div>
-
-        {/* 内容 */}
-        <div>
-          <label htmlFor="content" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            内容 <span className="text-red-500">*</span>
-          </label>
-          <RichTextEditor
-            content={content}
-            onChange={setContent}
-            onUploadImage={handleUploadEditorImage}
-            placeholder="写下你的想法..."
-            className="mt-2 min-h-[400px]"
-          />
-        </div>
-
-        {/* 标签 */}
-        <div>
-          <label htmlFor="tags" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            标签
-          </label>
-          <input
-            type="text"
-            id="tags"
-            value={tags}
-            onChange={(e) => setTags(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            placeholder="输入标签，用逗号分隔"
-          />
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">例如：技术, 分享, 经验</p>
-        </div>
-
-        {/* 图片 */}
-        <div>
-          <label htmlFor="imageUrls" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-            图片 URL（支持多张，用逗号分隔）
-          </label>
-          <textarea
-            id="imageUrls"
-            value={imageUrls}
-            onChange={(e) => setImageUrls(e.target.value)}
-            className="mt-2 w-full rounded-lg border border-gray-300 px-4 py-2 focus:border-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-100"
-            placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
-            rows={2}
-          />
-          <div className="mt-3 flex flex-wrap items-center gap-4">
-            <label className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-200 dark:hover:bg-gray-700">
-              <input type="file" accept="image/*" multiple onChange={handleUploadImages} className="hidden" />
-              <span>{isUploadingImage ? "上传中..." : "选择本地图片上传"}</span>
-            </label>
-            <span className="text-xs text-gray-500 dark:text-gray-400">支持 http/https 图片链接，可上传多张图片</span>
+        {/* ── Header ── */}
+        <div className="mb-8 flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              {isEdit ? "编辑帖子" : "发布新帖子"}
+            </h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              {isEdit ? "修改你的帖子内容" : "分享你的想法、经验与见解"}
+            </p>
           </div>
-          {/* 图片预览 */}
-          {imageList.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-3">
-              {imageList.map((url, index) => (
-                <div key={index} className="group relative">
-                  <img
-                    src={url}
-                    alt={`图片 ${index + 1}`}
-                    className="h-20 w-28 rounded-lg border border-gray-200 object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeImage(index)}
-                    className="absolute -right-2 -top-2 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-xs text-white opacity-0 transition-opacity hover:bg-red-600 group-hover:opacity-100"
-                  >
-                    ×
-                  </button>
-                </div>
-              ))}
+
+          {/* Auto-save indicator */}
+          {!isEdit && (
+            <div className="flex items-center gap-2 text-xs text-gray-400 dark:text-gray-500">
+              {autoSaveStatus === "saving" && (
+                <>
+                  <span className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
+                  <span>保存中…</span>
+                </>
+              )}
+              {autoSaveStatus === "saved" && (
+                <>
+                  <svg className="h-3.5 w-3.5 text-green-500" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="2,8 6,12 14,4" />
+                  </svg>
+                  <span className="text-green-500">草稿已自动保存</span>
+                </>
+              )}
             </div>
           )}
         </div>
 
-        {/* 操作按钮 */}
-        <div className="flex items-center justify-between border-t border-gray-200 pt-6 dark:border-gray-800">
-          {!isEdit && (
-            <Button type="button" variant="outline" onClick={handleSaveDraft}>
-              保存草稿
-            </Button>
-          )}
-          <div className={`flex gap-4 ${isEdit ? "w-full justify-end" : ""}`}>
-            <Button type="button" variant="outline" onClick={() => navigate(-1)}>
-              取消
-            </Button>
-            <Button type="submit" disabled={isSubmitting} variant="primary">
-              {isSubmitting ? (isEdit ? "更新中..." : "发布中...") : isEdit ? "更新帖子" : "发布帖子"}
-            </Button>
+        <form onSubmit={handleSubmit}>
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+
+            {/* ── Left / Main column ── */}
+            <div className="space-y-5 lg:col-span-2">
+
+              {/* Title */}
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">标题</span>
+                </div>
+                <div className="px-4 py-3">
+                  <input
+                    type="text"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    className="w-full bg-transparent text-lg font-semibold text-gray-900 placeholder-gray-300 focus:outline-none dark:text-gray-100 dark:placeholder-gray-600"
+                    placeholder="给你的帖子起个吸引人的标题…"
+                    maxLength={TITLE_MAX}
+                  />
+                  <div className="mt-2 flex justify-end">
+                    <span className={`text-xs tabular-nums ${title.length > TITLE_MAX * 0.9 ? "text-amber-500" : "text-gray-300 dark:text-gray-600"}`}>
+                      {title.length} / {TITLE_MAX}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content */}
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">正文</span>
+                </div>
+                <RichTextEditor
+                  content={content}
+                  onChange={setContent}
+                  onUploadImage={handleUploadEditorImage}
+                  placeholder="写下你的想法…支持 Markdown 格式、图片插入"
+                  className="min-h-[360px]"
+                />
+                <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2 dark:border-gray-800">
+                  <span className="text-xs text-gray-400 dark:text-gray-500">支持富文本格式</span>
+                  <span className="text-xs tabular-nums text-gray-400 dark:text-gray-500">{wordCount} 字</span>
+                </div>
+              </div>
+
+              {/* Cover images */}
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">封面图片</span>
+                </div>
+                <div className="p-4 space-y-4">
+                  {/* Drop zone */}
+                  <div
+                    onDragOver={(e) => { e.preventDefault(); setIsDragging(true) }}
+                    onDragLeave={() => setIsDragging(false)}
+                    onDrop={handleDrop}
+                    onClick={() => fileInputRef.current?.click()}
+                    className={`relative flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-8 transition-colors ${
+                      isDragging
+                        ? "border-blue-400 bg-blue-50 dark:border-blue-500 dark:bg-blue-950/30"
+                        : "border-gray-200 hover:border-blue-300 hover:bg-gray-50 dark:border-gray-700 dark:hover:border-blue-600 dark:hover:bg-gray-800/50"
+                    }`}
+                  >
+                    {isUploadingImage ? (
+                      <>
+                        <span className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-blue-500 border-t-transparent" />
+                        <span className="text-sm text-gray-500 dark:text-gray-400">上传中…</span>
+                      </>
+                    ) : (
+                      <>
+                        <svg className="h-8 w-8 text-gray-300 dark:text-gray-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                          <rect x="3" y="3" width="18" height="18" rx="3" />
+                          <circle cx="8.5" cy="8.5" r="1.5" fill="currentColor" stroke="none" />
+                          <path d="M21 15l-5-5L5 21" />
+                        </svg>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          <span className="font-medium text-blue-500">点击上传</span>
+                          {" "}或拖拽图片到此处
+                        </p>
+                        <p className="text-xs text-gray-400 dark:text-gray-600">JPG、PNG、GIF、WebP，最大 {Math.round(UPLOAD_CONFIG.image.maxSize / (1024 * 1024))}MB</p>
+                      </>
+                    )}
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={handleUploadImages}
+                    />
+                  </div>
+
+                  {/* Image previews */}
+                  {imageUrls.length > 0 && (
+                    <div className="grid grid-cols-4 gap-3 sm:grid-cols-5">
+                      {imageUrls.map((url, index) => (
+                        <div key={index} className="group relative aspect-square">
+                          <img
+                            src={url}
+                            alt={`图片 ${index + 1}`}
+                            className="h-full w-full rounded-lg border border-gray-200 object-cover dark:border-gray-700"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => removeImage(index)}
+                            className="absolute -right-1.5 -top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-red-500 text-white opacity-0 shadow transition-opacity hover:bg-red-600 group-hover:opacity-100"
+                          >
+                            <svg className="h-2.5 w-2.5" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" />
+                            </svg>
+                          </button>
+                          {index === 0 && (
+                            <span className="absolute bottom-1 left-1 rounded bg-black/60 px-1 py-0.5 text-[10px] text-white">封面</span>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* ── Right / Sidebar ── */}
+            <div className="space-y-5">
+
+              {/* Publish card */}
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">发布</span>
+                </div>
+                <div className="space-y-3 p-4">
+                  <Button
+                    type="submit"
+                    variant="primary"
+                    disabled={isSubmitting}
+                    className="w-full justify-center"
+                  >
+                    {isSubmitting
+                      ? (isEdit ? "更新中…" : "发布中…")
+                      : (isEdit ? "更新帖子" : "立即发布")}
+                  </Button>
+                  {!isEdit && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSaveDraft}
+                      className="w-full justify-center"
+                    >
+                      保存草稿
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => navigate(-1)}
+                    className="w-full justify-center text-gray-500"
+                  >
+                    取消
+                  </Button>
+                </div>
+              </div>
+
+              {/* Tags */}
+              <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-900">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-gray-800">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-semibold uppercase tracking-wider text-gray-400 dark:text-gray-500">标签</span>
+                    <span className="text-xs text-gray-400 dark:text-gray-600">{tags.length} / {TAG_MAX}</span>
+                  </div>
+                </div>
+                <div className="p-4 space-y-3">
+                  {/* Tag chips */}
+                  {tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {tags.map((tag, i) => (
+                        <span
+                          key={i}
+                          className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700 dark:bg-blue-900/40 dark:text-blue-300"
+                        >
+                          #{tag}
+                          <button
+                            type="button"
+                            onClick={() => removeTag(i)}
+                            className="ml-0.5 rounded-full text-blue-400 hover:text-blue-600 dark:text-blue-500 dark:hover:text-blue-300"
+                          >
+                            <svg className="h-3 w-3" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                              <line x1="1" y1="1" x2="9" y2="9" /><line x1="9" y1="1" x2="1" y2="9" />
+                            </svg>
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Tag input */}
+                  {tags.length < TAG_MAX && (
+                    <div
+                      className="flex items-center gap-2 rounded-lg border border-gray-200 px-3 py-2 focus-within:border-blue-400 focus-within:ring-2 focus-within:ring-blue-100 dark:border-gray-700 dark:focus-within:border-blue-500 dark:focus-within:ring-blue-900/30"
+                      onClick={() => tagInputRef.current?.focus()}
+                    >
+                      <span className="text-sm text-gray-400">#</span>
+                      <input
+                        ref={tagInputRef}
+                        type="text"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleTagKeyDown}
+                        onBlur={() => { if (tagInput.trim()) addTag(tagInput) }}
+                        className="flex-1 bg-transparent text-sm text-gray-900 placeholder-gray-400 focus:outline-none dark:text-gray-100 dark:placeholder-gray-600"
+                        placeholder="输入标签后按 Enter 或逗号确认"
+                      />
+                    </div>
+                  )}
+                  <p className="text-xs text-gray-400 dark:text-gray-600">按 Enter、逗号或空格添加，Backspace 删除</p>
+                </div>
+              </div>
+
+              {/* Tips */}
+              <div className="rounded-2xl border border-blue-100 bg-blue-50/50 p-4 dark:border-blue-900/40 dark:bg-blue-950/20">
+                <h3 className="mb-2 text-xs font-semibold text-blue-700 dark:text-blue-400">发帖小贴士</h3>
+                <ul className="space-y-1.5 text-xs text-blue-600/80 dark:text-blue-400/70">
+                  <li className="flex items-start gap-1.5">
+                    <span className="mt-0.5 shrink-0">•</span>
+                    <span>标题简洁明了，突出核心内容</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="mt-0.5 shrink-0">•</span>
+                    <span>正文支持图片、链接、列表等富文本格式</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="mt-0.5 shrink-0">•</span>
+                    <span>合理使用标签，方便其他人搜索发现</span>
+                  </li>
+                  <li className="flex items-start gap-1.5">
+                    <span className="mt-0.5 shrink-0">•</span>
+                    <span>草稿每 30 秒自动保存一次</span>
+                  </li>
+                </ul>
+              </div>
+
+            </div>
           </div>
-        </div>
-      </form>
+        </form>
+      </div>
     </div>
   )
 }

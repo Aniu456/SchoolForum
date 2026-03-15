@@ -7,15 +7,15 @@ import { useNotificationSocket, useChatSocket } from './useWebSocket';
 import { useAuthStore } from '@/store/useAuthStore';
 
 export const useAppSockets = () => {
-  const { token } = useAuthStore();
+  const accessToken = useAuthStore((state) => state.accessToken);
 
   // ============================================
   // 🔔 通知 Socket (默认命名空间)
   // ============================================
 
   const notificationSocket = useNotificationSocket({
-    token,
-    autoConnect: !!token,
+    token: accessToken,
+    autoConnect: !!accessToken,
     onConnect: () => {
       console.log('[App] 通知服务已连接');
     },
@@ -48,8 +48,8 @@ export const useAppSockets = () => {
   // ============================================
 
   const chatSocket = useChatSocket({
-    token,
-    autoConnect: !!token,
+    token: accessToken,
+    autoConnect: !!accessToken,
     onConnect: () => {
       console.log('[App] 聊天服务已连接');
     },

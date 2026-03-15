@@ -1,7 +1,6 @@
 'use client';
 
 import { Component, ReactNode } from 'react';
-import { Link } from 'react-router-dom';
 
 interface Props {
   children: ReactNode;
@@ -53,12 +52,15 @@ export class ErrorBoundary extends Component<Props, State> {
               >
                 刷新页面
               </button>
-              <Link
-                to="/"
+              <button
+                onClick={() => {
+                  this.setState({ hasError: false, error: undefined });
+                  window.location.href = '/';
+                }}
                 className="rounded-lg border border-gray-300 bg-white px-6 py-3 text-gray-700 hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
               >
                 返回首页
-              </Link>
+              </button>
             </div>
           </div>
         </div>

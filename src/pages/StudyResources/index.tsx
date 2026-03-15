@@ -1,6 +1,6 @@
 "use client"
 
-import { serviceCenterApi } from "@/api"
+import { postApi } from "@/api"
 import { Button, Card, EmptyState, LoadingState } from "@/components"
 import { formatTime } from "@/utils/format"
 import { Link, useNavigate } from "react-router-dom"
@@ -16,7 +16,15 @@ export default function StudyResourcesPage() {
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["study-resources", page],
-    queryFn: () => serviceCenterApi.getStudyResource(page, PAGE_SIZE),
+    queryFn: async () => {
+      return postApi.getPosts({
+        page,
+        limit: PAGE_SIZE,
+        tag: "学习资源",
+        sortBy: "createdAt",
+        order: "desc",
+      })
+    },
     placeholderData: keepPreviousData,
   })
 
@@ -108,7 +116,7 @@ export default function StudyResourcesPage() {
                           <BookOpen className="h-3 w-3" />
                           学习资源
                         </span>
-                        {post.tags.slice(0, 3).map((tag, idx) => (
+                        {post.tags?.slice(0, 3).map((tag, idx) => (
                           <span
                             key={idx}
                             className="flex items-center gap-1 rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-600"
